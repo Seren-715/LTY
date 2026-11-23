@@ -8,6 +8,7 @@ import { renderDiffTable, diffStats } from '../diff.js';
 import { renderChanges, mountFileBrowser, mountPreviewPanel } from '../components.js';
 import { createComposer } from '../composer.js';
 import { sidebarToggleButton } from '../sidebar.js';
+import { downloadZip } from '../zip.js';
 
 const TOOL_LABEL = {
   list_files: '查看文件列表',
@@ -126,6 +127,7 @@ export async function taskView(container, id) {
     morePop.innerHTML = `
       <button class="menu-item" data-act="rename">${icon('edit')}重命名</button>
       <a class="menu-item" href="#/projects/${task.projectId}">${icon('folder')}打开项目</a>
+      <button class="menu-item" data-act="dl-all">${icon('download')}下载项目 ZIP</button>
       <button class="menu-item" data-act="archive">${icon(task.archived ? 'unarchive' : 'archive')}${task.archived ? '取消归档' : '归档'}</button>
       ${task.usage?.cost ? `<div class="menu-tip">本任务花费 $${task.usage.cost.toFixed(4)}</div>` : ''}
       ${task.model ? `<div class="menu-tip mono">${esc(task.model)}</div>` : ''}
@@ -190,6 +192,13 @@ export async function taskView(container, id) {
       <div class="cc-head">${icon('diff')}<span class="grow">已修改 ${paths.length} 个文件 ${statsHtml(task.stats)}</span>
         <button class="btn ghost sm" data-open-change="">查看变更</button>
         <button class="btn ghost sm" data-panel="preview">${icon('eye')}预览</button>
+        <span class="menu">
+          <button class="btn soft sm" data-dl-menu>${icon('download')}下载</button>
+          <span class="menu-pop right hidden dl-pop">
+            <button class="menu-item" data-act="dl-all">${icon('folder')}<span class="grow">整个项目</span><span class="muted">ZIP</span></button>
+            <button class="menu-item" data-act="dl-changed">${icon('diff')}<span class="grow">只下载修改过的文件</span><span class="muted">ZIP</span></button>
+          </span>
+        </span>
       </div>
       <div class="cc-files">${rows}</div>
     </div>`;
@@ -354,9 +363,28 @@ export async function taskView(container, id) {
     }
     const pt = t.closest('[data-pt]');
     if (pt) return setPanel(true, pt.dataset.pt);
+    const dlMenu = t.closest('[data-dl-menu]');
+    if (dlMenu) {
+      e.stopPropagation();
+      const pop = dlMenu.nextElementSibling;
+      pop.classList.toggle('hidden');
+      return;
+    }
     const act = t.closest('[data-act]')?.dataset.act;
     if (!act) return;
     morePop.classList.add('hidden');
+    container.querySelectorAll('.dl-pop').forEach((p) => p.classList.add('hidden'));
+    if (act === 'dl-all' || act === 'dl-changed') {
+      if (!project) return toast('项目不存在或已被删除', 'error');
+      let files = project.files;
+      if (act === 'dl-changed') {
+        files = {};
+        for (const [p, c] of Object.entries(task.changes || {})) if (c.after != null && p in project.files) files[p] = project.files[p];
+      }
+      if (!Object.keys(files).length) return toast('没有可下载的文件', 'error');
+      downloadZip(project.name, files, act === 'dl-changed' ? '-修改的文件' : '');
+      return toast(`已打包 ${Object.keys(files).length} 个文件`, 'success');
+    }
     if (act === 'close-panel') setPanel(false);
     else if (act === 'retry') {
       try {

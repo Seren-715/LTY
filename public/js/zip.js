@@ -88,3 +88,16 @@ export function downloadBlob(blob, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+const safeName = (name) => String(name || 'project').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
+
+/** 下载单个文件（文件名取路径最后一段） */
+export function downloadFile(path, content) {
+  downloadBlob(new Blob([content], { type: 'text/plain;charset=utf-8' }), path.split('/').pop());
+}
+
+/** 把一组文件打包成 ZIP 下载；压缩包内以项目名作为根目录 */
+export function downloadZip(projectName, files, suffix = '') {
+  const name = safeName(projectName);
+  downloadBlob(makeZip(files, name), `${name}${suffix}.zip`);
+}

@@ -5,7 +5,7 @@ import { state, loadProjects, prefs, navigate } from '../state.js';
 import { renderTree, mountPreviewPanel } from '../components.js';
 import { highlight, langFromPath } from '../highlight.js';
 import { htmlEntries } from '../preview.js';
-import { makeZip, downloadBlob } from '../zip.js';
+import { downloadZip, downloadFile } from '../zip.js';
 
 const TEXT_EXT = /\.(html?|css|scss|less|js|mjs|cjs|jsx|ts|tsx|json|md|txt|py|java|go|rs|c|h|cpp|hpp|cs|php|rb|sh|bash|yml|yaml|toml|ini|env|xml|svg|vue|svelte|sql|kt|swift|dart|lua|r|gitignore|editorconfig|csv)$/i;
 
@@ -81,6 +81,7 @@ export async function projectView(container, id) {
     pane.innerHTML = `<div class="viewer-head">${icon('file')}<span class="grow" style="overflow:hidden;text-overflow:ellipsis">${esc(path)}</span>
         <span class="dirty-dot hidden" title="未保存"></span>
         <span class="muted pos" style="font-size:12px"></span>
+        <button class="btn ghost sm" data-act="dl-file" title="下载此文件">${icon('download')}</button>
         <button class="btn ghost sm" data-act="rename" title="重命名">${icon('edit')}</button>
         <button class="btn ghost sm" data-act="delete-file" title="删除">${icon('trash')}</button>
         <button class="btn sm primary" data-act="save" title="保存 (Ctrl+S)">${icon('save')}保存</button>
@@ -288,8 +289,9 @@ export async function projectView(container, id) {
     else if (act === 'preview') togglePreview(!showPreview);
     else if (act === 'zip') {
       if (!Object.keys(project.files).length) return toast('项目没有文件');
-      const safe = project.name.replace(/[\\/:*?"<>|\s]+/g, '-');
-      downloadBlob(makeZip({ ...project.files, ...drafts }, safe), `${safe}.zip`);
+      downloadZip(project.name, { ...project.files, ...drafts });
+    } else if (act === 'dl-file') {
+      if (active) downloadFile(active, currentContent(active));
     } else if (act === 'task') {
       prefs.set('projectId', id);
       navigate('#/');

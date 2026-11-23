@@ -3,6 +3,7 @@ import { esc, el, $, $$, icon } from './ui.js';
 import { highlight, langFromPath } from './highlight.js';
 import { renderDiffTable, diffStats } from './diff.js';
 import { mountPreview, htmlEntries } from './preview.js';
+import { downloadFile } from './zip.js';
 
 // —— 文件树 ——
 function buildTree(paths) {
@@ -92,7 +93,8 @@ export function mountFileBrowser(container, { getFiles, getMarks }) {
       return;
     }
     const content = files[active];
-    viewer.innerHTML = `<div class="viewer-head">${icon('file')}<span class="grow" style="overflow:hidden;text-overflow:ellipsis">${esc(active)}</span><span class="muted">${content.split('\n').length} 行</span></div>${codeViewHtml(active, content)}`;
+    viewer.innerHTML = `<div class="viewer-head">${icon('file')}<span class="grow" style="overflow:hidden;text-overflow:ellipsis">${esc(active)}</span><span class="muted">${content.split('\n').length} 行</span><button class="btn ghost sm" data-dl-file title="下载此文件">${icon('download')}</button></div>${codeViewHtml(active, content)}`;
+    $(viewer, '[data-dl-file]').onclick = () => downloadFile(active, content);
   };
   render();
   return { refresh: render };
@@ -116,6 +118,7 @@ export function renderChanges(container, changes, { onRevert, onRevertAll, readO
     return `<div class="diff-file" data-path="${esc(p)}">
       <div class="diff-file-head">${icon('chev-down', 'chev')}<span class="path grow">${esc(p)}</span>${tag}
         <span class="stat"><span class="add">+${s.added}</span><span class="del">−${s.removed}</span></span>
+        ${c.after != null ? `<button class="btn ghost sm" data-dl="${esc(p)}" title="下载此文件">${icon('download')}</button>` : ''}
         ${readOnly ? '' : `<button class="btn ghost sm" data-revert="${esc(p)}" title="撤销此文件的修改">${icon('undo')}</button>`}
       </div>
       <div class="diff-table-wrap">${renderDiffTable(c.before ?? '', c.after ?? '', langFromPath(p))}</div>
@@ -125,6 +128,11 @@ export function renderChanges(container, changes, { onRevert, onRevertAll, readO
     <button class="btn sm ghost" data-act="collapse">全部折叠</button>
     ${readOnly ? '' : `<button class="btn sm danger" data-act="revert-all">${icon('undo')}撤销全部</button>`}</div>${blocks.join('')}`;
   container.onclick = (e) => {
+    const dl = e.target.closest('[data-dl]');
+    if (dl) {
+      e.stopPropagation();
+      return downloadFile(dl.dataset.dl, changes[dl.dataset.dl].after);
+    }
     const rv = e.target.closest('[data-revert]');
     if (rv) {
       e.stopPropagation();
