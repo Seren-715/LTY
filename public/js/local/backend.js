@@ -10,11 +10,14 @@ import { templateList, templateFiles } from '../core/templates.js';
 
 const SITE = window.RTY_CONFIG || {};
 const SESSION_KEY = 'rty:session';
+const modelCatalog = Array.isArray(SITE.modelCatalog) ? SITE.modelCatalog : [];
+const groupedModels = modelCatalog.length > 0;
 
 const projects = new Collection('projects');
 const tasks = new Collection('tasks');
 let session = null; // { accountId, key, nickname, createdAt, apiBaseUrl }
 let modelCache = null;
+let modelRefresh = null;
 const runs = new Map(); // taskId -> { controller, listeners:Set<fn>, partial }
 
 class HttpError extends Error {
@@ -86,22 +89,45 @@ function publicUser() {
   return session ? { id: session.accountId, username: session.nickname, role: 'user', createdAt: session.createdAt } : null;
 }
 
-async function models() {
-  if (Array.isArray(SITE.models) && SITE.models.length) return SITE.models;
-  if (!session) return [];
-  if (modelCache) return modelCache;
-  const activeSession = session;
-  const list = await listModels(apiCfg(), AbortSignal.timeout(15000), { toolsOnly: true }).catch(() => null);
-  if (session === activeSession && list?.length) modelCache = list;
-  return list || [];
+async function discoverModels(cfg, signal) {
+  const available = await listModels(cfg, signal, { toolsOnly: !groupedModels });
+  if (!groupedModels) return available;
+  return modelCatalog
+    .map(({ id, aliases = [] }) => [id, ...aliases].find((name) => available.includes(name)))
+    .filter(Boolean);
 }
 
-async function config() {
-  const ms = await models();
+async function models(refresh = false) {
+  if (!groupedModels && Array.isArray(SITE.models) && SITE.models.length) return SITE.models;
+  if (!session) return [];
+  if (!refresh && modelCache) return modelCache;
+  if (!modelRefresh) {
+    const activeSession = session;
+    const pending = discoverModels(apiCfg(), AbortSignal.timeout(15000))
+      .then((list) => {
+        if (session !== activeSession) throw new HttpError(401, '登录状态已变更，请重试');
+        modelCache = list;
+        return list;
+      })
+      .finally(() => { if (modelRefresh === pending) modelRefresh = null; });
+    modelRefresh = pending;
+  }
+  try {
+    return await modelRefresh;
+  } catch (e) {
+    if (!refresh) return [];
+    const detail = e instanceof TypeError ? '浏览器无法访问模型接口，请检查网络或跨域设置（CORS）' : e.message;
+    throw new HttpError(e.status === 401 ? 401 : 502, `刷新模型失败：${detail}`);
+  }
+}
+
+async function config(refresh) {
+  const ms = await models(refresh);
   return {
     mode: 'static',
     siteName: SITE.siteName || 'RTY Code',
     configured: !!SITE.apiBaseUrl && ms.length > 0,
+    groupedModels,
     models: ms,
     defaultModel: SITE.defaultModel && ms.includes(SITE.defaultModel) ? SITE.defaultModel : ms[0] || '',
     allowRegister: false,
@@ -231,6 +257,7 @@ function startRun(task) {
 
   const cfg = {
     ...apiCfg(),
+    protocol: modelCatalog.find(({ id, aliases }) => id === task.model || aliases?.includes(task.model))?.protocol,
     siteName: SITE.siteName || 'RTY Code',
     systemPrompt: SITE.systemPrompt || '',
     maxSteps: SITE.maxSteps || 30,
@@ -261,9 +288,16 @@ function startRun(task) {
     });
 }
 
-function pickModel(requested, list) {
-  if (requested && (list.includes(requested) || !list.length)) return requested;
-  return SITE.defaultModel && list.includes(SITE.defaultModel) ? SITE.defaultModel : list[0] || '';
+async function modelForRun(requested, previous) {
+  const activeSession = session;
+  const list = await models(groupedModels);
+  if (session !== activeSession) throw new HttpError(401, '登录状态已变更，请重试');
+  const selected = [requested, previous, SITE.defaultModel].find((id) => list.includes(id)) || list[0];
+  if (selected) return selected;
+  if (!groupedModels && (requested || previous)) return requested || previous;
+  throw new HttpError(400, groupedModels
+    ? '当前 API Key 分组没有受支持的模型。请在唐果切换分组后刷新模型。'
+    : '没有可用的模型，请检查 config.js 中的 models');
 }
 
 // ───────────── 路由 ─────────────
@@ -275,7 +309,7 @@ function route(method, pattern, handler, opts = {}) {
   routes.push({ method, re, keys, handler, auth: opts.auth !== false });
 }
 
-route('GET', '/api/config', () => config(), { auth: false });
+route('GET', '/api/config', ({ query }) => config(query.refreshModels === '1'), { auth: false });
 route('GET', '/api/health', () => ({ ok: true, mode: 'static' }), { auth: false });
 
 route(
@@ -291,8 +325,8 @@ route(
     let info;
     let discoveredModels = null;
     try {
-      info = await getKeyInfo(cfg, signal);
-      if (!info) discoveredModels = await listModels(cfg, signal, { toolsOnly: true });
+      if (!groupedModels) info = await getKeyInfo(cfg, signal);
+      if (!info) discoveredModels = await discoverModels(cfg, signal);
     } catch (e) {
       if (e.status === 401 || e.status === 403) throw new HttpError(401, 'API Key 无效，请检查是否复制完整');
       if (e instanceof TypeError) throw new HttpError(502, '浏览器无法连接模型接口。请检查网络，以及 API 提供方是否允许当前站点跨域访问（CORS）。');
@@ -305,7 +339,8 @@ route(
     await idb.put('accounts', acct);
     const s = { accountId, key, nickname: acct.nickname, createdAt: acct.createdAt, apiBaseUrl: cfg.apiBaseUrl };
     localStorage.setItem(SESSION_KEY, JSON.stringify(s));
-    modelCache = discoveredModels?.length ? discoveredModels : null;
+    modelCache = discoveredModels;
+    modelRefresh = null;
     await activate(s);
     return { user: publicUser() };
   },
@@ -320,6 +355,7 @@ route(
     localStorage.removeItem(SESSION_KEY);
     session = null;
     modelCache = null;
+    modelRefresh = null;
     projects.items.clear();
     tasks.items.clear();
     return { ok: true };
@@ -341,6 +377,7 @@ route('POST', '/api/auth/nickname', async ({ body }) => {
 });
 
 route('GET', '/api/balance', async () => {
+  if (groupedModels) return { unsupported: true };
   try {
     const info = await getKeyInfo(apiCfg(), AbortSignal.timeout(15000));
     return info || { unsupported: true };
@@ -495,6 +532,7 @@ route('GET', '/api/tasks', ({ query }) => {
 route('POST', '/api/tasks', async ({ body }) => {
   const prompt = String(body.prompt || '').trim();
   if (!prompt) throw new HttpError(400, '请输入任务描述');
+  const model = await modelForRun(body.model);
   const project = ownProject(body.projectId);
   const mode = body.mode === 'ask' ? 'ask' : 'code';
   const task = {
@@ -503,7 +541,7 @@ route('POST', '/api/tasks', async ({ body }) => {
     projectId: project.id,
     title: makeTitle(prompt),
     mode,
-    model: pickModel(body.model, await models()),
+    model,
     status: 'queued',
     history: [{ role: 'user', content: prompt, _at: Date.now(), _mode: mode }],
     changes: {},
@@ -539,10 +577,11 @@ route('POST', '/api/tasks/:id/messages', async ({ params, body }) => {
   if (runs.has(t.id)) throw new HttpError(409, '任务正在运行，请等待完成或先停止');
   const prompt = String(body.prompt || '').trim();
   if (!prompt) throw new HttpError(400, '请输入内容');
+  const model = await modelForRun(body.model, t.model);
+  ownTask(t.id);
+  if (runs.has(t.id)) throw new HttpError(409, '任务正在运行，请等待完成或先停止');
   if (body.mode === 'ask' || body.mode === 'code') t.mode = body.mode;
-  const list = await models();
-  if (body.model) t.model = pickModel(body.model, list);
-  if (!t.model) t.model = pickModel('', list);
+  t.model = model;
   t.history.push({ role: 'user', content: prompt, _at: Date.now(), _mode: t.mode });
   startRun(t);
   return publicTask(t, true);
@@ -551,9 +590,10 @@ route('POST', '/api/tasks/:id/messages', async ({ params, body }) => {
 route('POST', '/api/tasks/:id/retry', async ({ params, body }) => {
   const t = ownTask(params.id);
   if (runs.has(t.id)) throw new HttpError(409, '任务正在运行');
-  const list = await models();
-  if (body.model) t.model = pickModel(body.model, list);
-  if (!t.model) t.model = pickModel('', list);
+  const model = await modelForRun(body.model, t.model);
+  ownTask(t.id);
+  if (runs.has(t.id)) throw new HttpError(409, '任务正在运行');
+  t.model = model;
   while (t.history.length && t.history[t.history.length - 1]._partial) t.history.pop();
   startRun(t);
   return publicTask(t, true);

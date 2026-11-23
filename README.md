@@ -30,9 +30,16 @@
 
 1. 把 `public/` 目录的全部内容部署到静态托管平台。
 2. 在 [唐果中转站](https://api.tangguo.xin/) 创建 API Key，在站点登录页输入该 Key。API 地址已配置为 `https://api.tangguo.xin/v1`。
-3. 登录会调用 `/v1/models` 验证 Key 并读取可用的模型。编码任务需选择支持工具调用的模型。
+3. 登录会调用 `/v1/models` 验证 Key，并且只显示当前分组授权的下列型号。
 
-**跨域要求**　唐果需要允许部署站点的来源通过 CORS 访问 `/v1/models` 和 `/v1/chat/completions`，并允许 `Authorization`、`Content-Type` 请求头。实测 GitHub Pages 和本地预览来源的预检均返回 403。唐果开通部署站点的跨域访问后，浏览器才能验证 Key 并发送聊天请求。
+| 模型 | 接口 |
+| --- | --- |
+| GPT 6.2 Sol、GPT 6.2 Astra | OpenAI `/v1/chat/completions` |
+| Claude Opus 5.5、Claude Sonnet 5.5 | Anthropic `/v1/messages` |
+
+在唐果修改同一个 Key 的分组后，点击模型下拉框旁的「刷新模型」。创建任务、追问或重试时也会重新确认授权。如果旧模型在新分组不可用，会用该分组可用的默认模型继续，历史和项目文件仍保存在当前浏览器。
+
+**跨域要求**　浏览器直连需要唐果允许站点来源访问以上两个聊天端点和 `/v1/models`。需允许 `Authorization`、`Content-Type`、`x-api-key`、`anthropic-version` 请求头。实测唐果对 GitHub Pages 和本地预览来源的跨域预检返回 403。本地预览若通过允许跨域的转发地址访问，可把 `apiBaseUrl` 指向该地址的 `/v1`，并保留模型目录配置。
 
 本地预览：
 

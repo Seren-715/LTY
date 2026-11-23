@@ -16,10 +16,13 @@ window.RTY_CONFIG = {
   // 使用静态模式时，接口必须允许浏览器跨域访问。
   apiBaseUrl: 'https://api.tangguo.xin/v1',
 
-  // 可选的模型 ID，以提供方返回的名称为准。
-  // 必须选择支持工具调用（Tools）的模型，否则「编码」模式无法修改文件。
-  // 留空 [] 则登录后自动拉取当前 Key 可见的模型。
-  models: [],
+  // 只显示当前 Key 分组可用的型号。优先使用官方 ID，再匹配中转站别名。
+  modelCatalog: [
+    { id: 'gpt-6.2-sol', protocol: 'openai' },
+    { id: 'gpt-6.2-astra', protocol: 'openai' },
+    { id: 'claude-opus-5-5', aliases: ['claude-opus-5.5'], protocol: 'anthropic' },
+    { id: 'claude-sonnet-5-5', aliases: ['claude-sonnet-5.5'], protocol: 'anthropic' },
+  ],
 
   // 默认模型（留空则使用列表第一个）
   defaultModel: '',

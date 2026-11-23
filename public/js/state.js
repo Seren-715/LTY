@@ -7,8 +7,8 @@ export const state = {
   projects: [],
 };
 
-export async function loadConfig() {
-  state.config = await api.get('/api/config');
+export async function loadConfig({ refreshModels = false } = {}) {
+  state.config = await api.get(refreshModels ? '/api/config?refreshModels=1' : '/api/config');
   state.user = state.config.user;
   return state.config;
 }

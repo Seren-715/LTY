@@ -6,7 +6,7 @@ import { renderMarkdown } from '../markdown.js';
 import { highlight, langFromPath } from '../highlight.js';
 import { renderDiffTable } from '../diff.js';
 import { renderChanges, mountFileBrowser, mountPreviewPanel } from '../components.js';
-import { modelOptions } from './home.js';
+import { bindModelRefresh, modelOptions, modelRefreshButton } from './home.js';
 
 const TOOL_LABEL = {
   list_files: '列出文件',
@@ -27,7 +27,7 @@ function parseArgs(raw) {
 }
 
 export async function taskView(container, id) {
-  if (!state.config) await loadConfig();
+  if (!state.config || state.config.mode === 'static') await loadConfig();
   let task = await api.get(`/api/tasks/${id}`);
   let project = null;
   let partial = null;
@@ -57,6 +57,7 @@ export async function taskView(container, id) {
               <button data-fm="code">${icon('code')}编码</button>
             </div>
             <select class="select pill-select model" title="模型"></select>
+            ${modelRefreshButton()}
             <span class="spacer"></span>
             <button class="send-btn" title="发送">${icon('arrow-up')}</button>
           </div>
@@ -80,6 +81,7 @@ export async function taskView(container, id) {
   const fit = autosize(ta, 220);
   const sendBtn = $(container, '.send-btn');
   const modelSel = $(container, '.followup .model');
+  bindModelRefresh(container, modelSel);
   const panelBody = $(container, '.panel-body');
   const running = () => task.status === 'running' || task.status === 'queued';
 
@@ -217,8 +219,11 @@ export async function taskView(container, id) {
       return;
     }
     if (e.target.closest('[data-act="retry"]')) {
+      if (modelSel.disabled) return;
       try {
-        task = await api.post(`/api/tasks/${id}/retry`, { model: modelSel.value });
+        const model = modelSel.value;
+        task = await api.post(`/api/tasks/${id}/retry`, { model });
+        syncRunModel(model, task.model);
         partial = null;
         renderAll(true);
         subscribe();
@@ -311,7 +316,13 @@ export async function taskView(container, id) {
   });
 
   // —— 追问 ——
-  modelSel.innerHTML = modelOptions(state.config.models.includes(task.model) ? task.model : state.config.defaultModel);
+  modelSel.innerHTML = modelOptions(task.model);
+  function syncRunModel(requested, actual) {
+    if (state.config.mode !== 'static' || requested === actual) return;
+    loadConfig().then(() => {
+      if (!destroyed && !modelSel.disabled && modelSel.value === requested) modelSel.innerHTML = modelOptions(actual);
+    }).catch(() => {});
+  }
   const syncMode = () => container.querySelectorAll('[data-fm]').forEach((b) => b.classList.toggle('active', b.dataset.fm === followMode));
   syncMode();
   container.querySelectorAll('[data-fm]').forEach(
@@ -327,11 +338,14 @@ export async function taskView(container, id) {
       await api.post(`/api/tasks/${id}/stop`).catch((err) => toast(err.message, 'error'));
       return;
     }
+    if (modelSel.disabled) return;
     const prompt = ta.value.trim();
     if (!prompt) return ta.focus();
     sendBtn.disabled = true;
     try {
-      task = await api.post(`/api/tasks/${id}/messages`, { prompt, mode: followMode, model: modelSel.value });
+      const model = modelSel.value;
+      task = await api.post(`/api/tasks/${id}/messages`, { prompt, mode: followMode, model });
+      syncRunModel(model, task.model);
       ta.value = '';
       fit();
       partial = null;
