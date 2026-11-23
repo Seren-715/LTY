@@ -7,8 +7,7 @@ window.RTY_CONFIG = {
   //               智能体在浏览器里运行，数据保存在各自的浏览器中。
   //   'server' —— 配合 server.js 使用（有服务器时的完整版，账号和余额由服务器管理）。
   //   'auto'   —— 自动检测：能连上 server.js 就用服务器模式，否则用静态模式。
-  // 唐果当前不允许浏览器跨域直连，请通过 server.js 使用。
-  mode: 'server',
+  mode: 'static',
 
   // 站点名称
   siteName: 'RTY Code',
@@ -32,5 +31,5 @@ window.RTY_CONFIG = {
   systemPrompt: '',
 
   // 登录页的说明文字
-  loginHint: '请输入分配给你的 API Key。没有 Key？请联系站点管理员。',
+  loginHint: '请输入你的唐果 API Key。',
 };

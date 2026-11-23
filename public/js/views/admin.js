@@ -11,9 +11,9 @@ export async function adminView(container) {
 
     <form class="card api-form" autocomplete="off">
       <h2>${icon('key')} 模型接口</h2>
-      <p class="sub">使用唐果分配的 API Key，并从接口拉取模型 ID。API Key 只保存在服务器上。此处也支持其他 OpenAI 兼容接口。</p>
+      <p class="sub">支持任何 OpenAI 兼容接口（OpenAI、DeepSeek、通义千问 DashScope 兼容模式、Moonshot、OpenRouter、各类中转等）。API Key 只保存在服务器上，不会发送到浏览器。</p>
       <div class="form-grid">
-        <div class="field full"><label>API 地址</label><input class="input mono" name="apiBaseUrl" placeholder="https://api.tangguo.xin/v1">
+        <div class="field full"><label>API 地址</label><input class="input mono" name="apiBaseUrl" placeholder="https://api.openai.com/v1">
           <span class="hint">填写到 /v1 即可，系统会自动请求 <code>/chat/completions</code>；也可以直接填写完整的 chat/completions 地址。</span></div>
         <div class="field full"><label>API Key</label><input class="input mono" name="apiKey" type="password" placeholder="sk-...">
           <span class="hint key-hint"></span></div>

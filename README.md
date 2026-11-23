@@ -4,15 +4,15 @@
 
 网站有两种运行模式，代码是同一份：
 
-| | **服务器模式（唐果默认）** | 纯静态模式 |
+| | 服务器模式（可选） | **纯静态模式（默认）** |
 | --- | --- | --- |
 | 部署 | 运行 `server.js`（Node.js 18.17+ 或 Docker） | 上传 `public/` 到静态托管，API 提供方须允许浏览器跨域访问 |
 | 账号 | 用户名 + 密码注册登录 | 用 API Key 登录 |
-| 额度 | 所有人共用管理员配置的唐果 Key | 由 API 提供方管理，站内余额显示取决于提供方接口 |
+| 额度 | 所有人共用管理员配置的 Key | 每人使用自己的唐果 Key，额度在唐果查看 |
 | 智能体 | 在服务器后台运行 | 在浏览器里运行，关掉页面任务停止 |
 | 数据 | 保存在服务器 `data/` 目录 | 保存在各自浏览器（IndexedDB），可导出 / 导入备份 |
 
-`public/config.js` 默认使用 `mode: 'server'`。唐果的跨域预检会拒绝浏览器直连，因此请用服务器模式接入唐果。
+`public/config.js` 默认使用 `mode: 'static'`。站点只需要静态文件托管，模型请求由浏览器直接发给唐果。
 
 ## 功能
 
@@ -26,29 +26,25 @@
 | 项目 | 新建项目（空白 / 网页 / Node.js / Python 模板），在线编辑器（语法高亮、Ctrl+S 保存），上传文件（支持拖拽），下载 ZIP，项目自定义指令 / `AGENTS.md` |
 | 管理（服务器模式） | 在网页中配置 API 地址、Key、模型列表、测试连接；开关注册；用户管理 |
 
-## 唐果 API：快速开始
+## 纯静态部署与唐果 Key 登录
+
+1. 把 `public/` 目录的全部内容部署到静态托管平台。
+2. 在 [唐果中转站](https://api.tangguo.xin/) 创建 API Key，在站点登录页输入该 Key。API 地址已配置为 `https://api.tangguo.xin/v1`。
+3. 登录会调用 `/v1/models` 验证 Key 并读取可用的模型。编码任务需选择支持工具调用的模型。
+
+**跨域要求**　唐果需要允许部署站点的来源通过 CORS 访问 `/v1/models` 和 `/v1/chat/completions`，并允许 `Authorization`、`Content-Type` 请求头。实测 GitHub Pages 和本地预览来源的预检均返回 403。唐果开通部署站点的跨域访问后，浏览器才能验证 Key 并发送聊天请求。
+
+本地预览：
 
 ```bash
-cp .env.example .env     # 可以在这里设置 Key 和模型，也可以启动后在管理页面配置
-npm start                # 打开 http://localhost:3000
+python -m http.server 8080 --directory public   # 打开 http://localhost:8080
 ```
 
-1. 在 [唐果中转站](https://api.tangguo.xin/) 创建 API Key。
-2. 在本网站注册账号，首次注册的账号会成为管理员。打开「管理」，填写 API 地址 `https://api.tangguo.xin/v1` 和唐果 Key。
-3. 点击「从接口拉取模型」，选择当前 Key 可用的模型。编码任务需选择支持工具调用的模型。
-4. 点击「测试连接」，确认能收到模型回复，再点击「保存配置」。
+项目和任务按 Key 保存在当前浏览器中。更换 Key 或部署域名时，可先从旧站的「账号设置」导出备份，再登录新站导入。
 
-在 `.env` 中配置时，设置 `API_KEY` 和 `MODELS`，模型 ID 以 `/v1/models` 返回值为准。部署过旧版的站点应在「管理」中一并替换现有 API 地址、Key、模型列表和默认模型，已保存的管理配置优先于环境变量。
+## 可选服务器模式（任意 Node.js 托管）
 
-旧静态部署的项目和任务位于原浏览器中。部署前可在旧站点的「账号设置」导出备份。服务器模式使用独立的数据目录。
-
-## 静态模式
-
-若使用允许浏览器访问的 OpenAI 兼容接口，在 `public/config.js` 中设置 `mode: 'static'` 和对应的 `apiBaseUrl`，再部署整个 `public/` 目录。`models` 留空时会在登录后拉取当前 Key 的可用模型，额度由 API 提供方管理。
-
-## 服务器模式部署（任意 Node.js 托管）
-
-本项目是一个标准的 Node.js Web 服务，部署时只需要：
+使用用户名和密码的旧版部署可将 `public/config.js` 的 `mode` 设为 `server`，再按以下说明配置：
 
 | 配置项 | 值 |
 | --- | --- |
@@ -66,14 +62,12 @@ npm start                # 打开 http://localhost:3000
 3. 为防止陌生人抢先注册成管理员，建议同时设置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`，服务启动时会自动创建管理员账号；如果是个人使用，可以设置 `ALLOW_REGISTER=false` 关闭公开注册。
 4. 部署完成后访问站点即可。
 
-> 唐果部署需要一个能运行 Node.js 后端的环境，也可以用 Docker 部署到云服务器。
-
 ### Docker
 
 ```bash
 docker build -t rty-code .
 docker run -d -p 3000:3000 -v $(pwd)/data:/app/data \
-  -e API_BASE_URL=https://api.tangguo.xin/v1 -e API_KEY=sk-xxx -e MODELS=YOUR_MODEL_ID \
+  -e API_BASE_URL=https://api.openai.com/v1 -e API_KEY=sk-xxx -e MODELS=gpt-4o \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=change-me-please \
   --name rty-code rty-code
 ```

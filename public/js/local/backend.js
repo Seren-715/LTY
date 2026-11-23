@@ -13,7 +13,7 @@ const SESSION_KEY = 'rty:session';
 
 const projects = new Collection('projects');
 const tasks = new Collection('tasks');
-let session = null; // { accountId, key, nickname, createdAt }
+let session = null; // { accountId, key, nickname, createdAt, apiBaseUrl }
 let modelCache = null;
 const runs = new Map(); // taskId -> { controller, listeners:Set<fn>, partial }
 
@@ -68,7 +68,7 @@ async function activate(s) {
 
 export async function initLocal() {
   const s = readSession();
-  if (s?.key && s.accountId) await activate(s);
+  if (s?.key && s.accountId && s.apiBaseUrl === SITE.apiBaseUrl) await activate(s);
   try {
     navigator.storage?.persist?.();
   } catch {
@@ -295,6 +295,7 @@ route(
       if (!info) discoveredModels = await listModels(cfg, signal, { toolsOnly: true });
     } catch (e) {
       if (e.status === 401 || e.status === 403) throw new HttpError(401, 'API Key 无效，请检查是否复制完整');
+      if (e instanceof TypeError) throw new HttpError(502, '浏览器无法连接模型接口。请检查网络，以及 API 提供方是否允许当前站点跨域访问（CORS）。');
       throw new HttpError(502, `验证 Key 失败：${e.message}`);
     }
     const accountId = (await sha256Hex(key)).slice(0, 16);
@@ -302,7 +303,7 @@ route(
     if (!acct) acct = { id: accountId, nickname: nickname || info?.label || '同学', createdAt: Date.now() };
     else if (nickname) acct.nickname = nickname;
     await idb.put('accounts', acct);
-    const s = { accountId, key, nickname: acct.nickname, createdAt: acct.createdAt };
+    const s = { accountId, key, nickname: acct.nickname, createdAt: acct.createdAt, apiBaseUrl: cfg.apiBaseUrl };
     localStorage.setItem(SESSION_KEY, JSON.stringify(s));
     modelCache = discoveredModels?.length ? discoveredModels : null;
     await activate(s);
