@@ -118,7 +118,22 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 }
 .avatar { overflow: hidden; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.avatar.lg { width: 48px; height: 48px; box-shadow: 0 0 0 3px var(--primary-soft); }
+.avatar.lg { width: 56px; height: 56px; box-shadow: 0 0 0 3px var(--primary-soft); }
+.avatar-edit { position: relative; padding: 0; cursor: pointer; }
+.avatar-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15, 30, 51, .45); color: #fff; opacity: 0; transition: opacity .15s; }
+.avatar-edit:hover .avatar-overlay, .avatar-edit:focus-visible .avatar-overlay { opacity: 1; }
+.avatar-links { display: flex; gap: 12px; margin-top: 4px; }
+.link-btn { border: 0; background: none; padding: 0; font-size: 12.5px; color: var(--primary); cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.link-btn.muted { color: var(--text-3); }
+.cropper { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.crop-stage { position: relative; overflow: hidden; border-radius: 14px; background: #eef3fa; cursor: grab; touch-action: none; user-select: none; }
+.crop-stage:active { cursor: grabbing; }
+.crop-stage img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; pointer-events: none; }
+.crop-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 200px rgba(15, 30, 51, .45); pointer-events: none; outline: 2px solid rgba(255, 255, 255, .9); outline-offset: -2px; }
+.crop-zoom { display: flex; align-items: center; gap: 10px; width: 100%; color: var(--text-3); }
+.crop-zoom input { flex: 1; accent-color: var(--primary); }
+.crop-tip { font-size: 12px; color: var(--text-3); }
 .menu { position: relative; }
 .menu-pop {
   position: absolute; left: 0; top: calc(100% + 6px); min-width: 210px; max-height: 360px; overflow: auto; padding: 5px;

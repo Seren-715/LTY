@@ -57,6 +57,11 @@ function readSession() {
 
 async function activate(s) {
   session = s;
+  try {
+    session.avatar = (await idb.get('accounts', s.accountId))?.avatar || null;
+  } catch {
+    session.avatar = null;
+  }
   await projects.load((p) => p.ownerId === s.accountId);
   await tasks.load((t) => t.ownerId === s.accountId);
   // 上次页面关闭时仍在运行的任务
@@ -86,8 +91,12 @@ export async function initLocal() {
 }
 
 function publicUser() {
-  return session ? { id: session.accountId, username: session.nickname, role: 'user', createdAt: session.createdAt } : null;
+  return session
+    ? { id: session.accountId, username: session.nickname, role: 'user', createdAt: session.createdAt, avatar: session.avatar || null }
+    : null;
 }
+
+const isValidAvatar = (v) => typeof v === 'string' && v.length <= 400000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 
 async function discoverModels(cfg, signal) {
   const available = await listModels(cfg, signal, { toolsOnly: !groupedModels });
@@ -365,10 +374,22 @@ route('POST', '/api/auth/nickname', async ({ body }) => {
   const n = String(body.nickname || '').trim().slice(0, 32);
   if (!n) throw new HttpError(400, '昵称不能为空');
   session.nickname = n;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ ...session, avatar: undefined }));
   const acct = (await idb.get('accounts', session.accountId)) || { id: session.accountId, createdAt: session.createdAt };
   acct.nickname = n;
   await idb.put('accounts', acct);
+  return { user: publicUser() };
+});
+
+// 头像保存在本地账号记录中（不放进 localStorage 的会话里）
+route('POST', '/api/auth/avatar', async ({ body }) => {
+  const avatar = body.avatar ?? null;
+  if (avatar !== null && !isValidAvatar(avatar)) throw new HttpError(400, '头像格式不正确或文件过大');
+  const acct = (await idb.get('accounts', session.accountId)) || { id: session.accountId, nickname: session.nickname, createdAt: session.createdAt };
+  if (avatar) acct.avatar = avatar;
+  else delete acct.avatar;
+  await idb.put('accounts', acct);
+  session.avatar = avatar;
   return { user: publicUser() };
 });
 

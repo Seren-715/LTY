@@ -124,8 +124,10 @@ function sessionCookie(req, token, maxAge) {
 }
 
 function publicUser(u) {
-  return { id: u.id, username: u.username, role: u.role, createdAt: u.createdAt };
+  return { id: u.id, username: u.username, role: u.role, createdAt: u.createdAt, avatar: u.avatar || null };
 }
+
+const isValidAvatar = (v) => typeof v === 'string' && v.length <= 400000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 
 function currentUser(req) {
   const token = auth.parseCookies(req.headers.cookie).sid;
@@ -408,6 +410,15 @@ route(
 );
 
 route('GET', '/api/auth/me', ({ user }) => ({ user: publicUser(user) }));
+
+route('POST', '/api/auth/avatar', ({ user, body }) => {
+  const avatar = body.avatar ?? null;
+  if (avatar !== null && !isValidAvatar(avatar)) throw new HttpError(400, '头像格式不正确或文件过大');
+  if (avatar) user.avatar = avatar;
+  else delete user.avatar;
+  store.users.save(user);
+  return { user: publicUser(user) };
+});
 
 route('POST', '/api/auth/password', async ({ req, user, body }) => {
   if (!(await auth.verifyPassword(String(body.oldPassword || ''), user.passwordHash))) throw new HttpError(400, '当前密码不正确');

@@ -3,6 +3,7 @@ import { api, getMode } from '../api.js';
 import { esc, $, icon, toast, formatDate, confirmDialog, promptDialog } from '../ui.js';
 import { downloadBlob } from '../zip.js';
 import { state, navigate } from '../state.js';
+import { avatarSrc, chooseAvatar } from '../avatar.js';
 
 export async function settingsView(container) {
   if (getMode() === 'static') return staticSettings(container);
@@ -13,9 +14,10 @@ export async function settingsView(container) {
       <h2>账号信息</h2>
       <p class="sub">你的基本信息</p>
       <div class="row" style="gap:14px">
-        <div class="avatar lg"><img src="img/avatar.jpg" alt=""></div>
+        ${avatarButton(user)}
         <div class="grow"><div style="font-weight:600;font-size:15px">${esc(user.username)}</div>
-          <div class="muted" style="font-size:13px">${user.role === 'admin' ? '管理员' : '普通用户'} · 注册于 ${formatDate(user.createdAt)}</div></div>
+          <div class="muted" style="font-size:13px">${user.role === 'admin' ? '管理员' : '普通用户'} · 注册于 ${formatDate(user.createdAt)}</div>
+          ${avatarLinks(user)}</div>
         <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
       </div>
     </div>
@@ -31,6 +33,7 @@ export async function settingsView(container) {
     </form>
   </div>`;
 
+  bindAvatar(container, user);
   $(container, '[data-act="logout"]').onclick = async () => {
     await api.post('/api/auth/logout').catch(() => {});
     state.user = null;
@@ -61,9 +64,10 @@ async function staticSettings(container) {
       <h2>账号</h2>
       <p class="sub">你的账号由 API Key 识别，数据保存在本浏览器中</p>
       <div class="row" style="gap:14px;flex-wrap:wrap">
-        <div class="avatar lg"><img src="img/avatar.jpg" alt=""></div>
+        ${avatarButton(user)}
         <div class="grow"><div style="font-weight:600;font-size:15px">${esc(user.username)} <button class="btn ghost sm" data-act="rename">${icon('edit')}改昵称</button></div>
-          <div class="muted mono" style="font-size:12.5px">${esc(masked)}</div></div>
+          <div class="muted mono" style="font-size:12.5px">${esc(masked)}</div>
+          ${avatarLinks(user)}</div>
         <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
       </div>
     </div>
@@ -86,6 +90,7 @@ async function staticSettings(container) {
     </div>
   </div>`;
 
+  bindAvatar(container, user);
   const box = $(container, '.balance-box');
   const loadBalance = async () => {
     box.innerHTML = '<span class="muted"><span class="spin"></span> 正在查询…</span>';
@@ -148,4 +153,38 @@ async function staticSettings(container) {
       toast(err instanceof SyntaxError ? '文件不是合法的 JSON' : err.message, 'error');
     }
   };
+}
+
+// —— 头像 ——
+function avatarButton(user) {
+  return `<button class="avatar lg avatar-edit" data-avatar="change" title="更换头像"><img src="${esc(avatarSrc(user))}" alt=""><span class="avatar-overlay">${icon('image')}</span></button>`;
+}
+
+function avatarLinks(user) {
+  return `<div class="avatar-links"><button class="link-btn" data-avatar="change">更换头像</button>${
+    user.avatar ? '<button class="link-btn muted" data-avatar="reset">恢复默认</button>' : ''
+  }</div>`;
+}
+
+function bindAvatar(container, user) {
+  container.addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-avatar]')?.dataset.avatar;
+    if (!act) return;
+    let avatar = null;
+    if (act === 'change') {
+      avatar = await chooseAvatar();
+      if (!avatar) return;
+    }
+    try {
+      const r = await api.post('/api/auth/avatar', { avatar });
+      state.user = r.user;
+      Object.assign(user, r.user);
+      container.querySelectorAll('.avatar-edit img').forEach((img) => (img.src = avatarSrc(r.user)));
+      container.querySelectorAll('.avatar-links').forEach((el) => (el.outerHTML = avatarLinks(r.user)));
+      window.dispatchEvent(new Event('rty:refresh-sidebar'));
+      toast(avatar ? '头像已更新' : '已恢复默认头像', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
 }

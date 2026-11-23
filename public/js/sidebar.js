@@ -3,6 +3,7 @@ import { api, getMode } from './api.js';
 import { esc, el, $, icon, toast, bindMenu } from './ui.js';
 import { state, prefs, navigate, loadProjects } from './state.js';
 import { newProjectDialog } from './views/projects.js';
+import { avatarSrc } from './avatar.js';
 
 const TASKS_PER_PROJECT = 8;
 
@@ -54,6 +55,8 @@ export function createSidebar({ onLogout }) {
     if (!u) return;
     $(root, '.site-name').textContent = state.config?.siteName || 'RTY Code';
     $(root, '.sb-user-name').textContent = u.username;
+    const img = $(root, '.sb-user .avatar img');
+    if (img.getAttribute('src') !== avatarSrc(u)) img.src = avatarSrc(u);
     root.querySelectorAll('.admin-link').forEach((a) => a.classList.toggle('hidden', u.role !== 'admin'));
   }
 
