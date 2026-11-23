@@ -7,21 +7,20 @@ window.RTY_CONFIG = {
   //               智能体在浏览器里运行，数据保存在各自的浏览器中。
   //   'server' —— 配合 server.js 使用（有服务器时的完整版，账号和余额由服务器管理）。
   //   'auto'   —— 自动检测：能连上 server.js 就用服务器模式，否则用静态模式。
-  mode: 'auto',
+  // 唐果当前不允许浏览器跨域直连，请通过 server.js 使用。
+  mode: 'server',
 
   // 站点名称
   siteName: 'RTY Code',
 
-  // 模型接口地址（OpenAI 兼容）。推荐 OpenRouter：可以给每个同学单独建 Key 并设置额度上限。
-  apiBaseUrl: 'https://openrouter.ai/api/v1',
+  // 以下模型设置仅用于静态模式。服务器模式使用 .env 或「站点管理」。
+  // 使用静态模式时，接口必须允许浏览器跨域访问。
+  apiBaseUrl: 'https://api.tangguo.xin/v1',
 
-  // 可选的模型（OpenRouter 的模型 ID，可在 https://openrouter.ai/models 查询）。
+  // 可选的模型 ID，以提供方返回的名称为准。
   // 必须选择支持工具调用（Tools）的模型，否则「编码」模式无法修改文件。
-  // 留空 [] 则自动从接口获取所有支持工具调用的模型。
-  models: [
-    'deepseek/deepseek-chat',
-    'openai/gpt-4o-mini',
-  ],
+  // 留空 [] 则登录后自动拉取当前 Key 可见的模型。
+  models: [],
 
   // 默认模型（留空则使用列表第一个）
   defaultModel: '',

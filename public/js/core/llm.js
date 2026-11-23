@@ -4,6 +4,7 @@
 function endpoint(baseUrl, suffix) {
   let u = String(baseUrl || '').trim().replace(/\/+$/, '');
   if (!u) throw new Error('尚未配置 API 地址');
+  if (/^https:\/\/api\.tangguo\.xin$/i.test(u)) u += '/v1';
   if (suffix === '/chat/completions') {
     if (/\/chat\/completions$/.test(u)) return u;
     return u + suffix;
@@ -162,12 +163,16 @@ export async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
   return { content, reasoning, toolCalls: finalizeToolCalls(toolCalls), finishReason, usage };
 }
 
-export async function listModels(cfg, signal) {
+export async function listModels(cfg, signal, { toolsOnly = false } = {}) {
   const res = await fetch(endpoint(cfg.apiBaseUrl, '/models'), { headers: headers(cfg), signal });
   if (!res.ok) throw await readError(res);
   const j = await res.json();
   const arr = Array.isArray(j.data) ? j.data : Array.isArray(j.models) ? j.models : Array.isArray(j) ? j : [];
-  return arr.map((m) => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean).sort();
+  return arr
+    .filter((m) => m && (!toolsOnly || !Array.isArray(m.supported_parameters) || m.supported_parameters.includes('tools')))
+    .map((m) => (typeof m === 'string' ? m : m.id || m.name))
+    .filter(Boolean)
+    .sort();
 }
 
 /**
@@ -175,7 +180,9 @@ export async function listModels(cfg, signal) {
  * 返回 { label, limit, remaining, usage } ；接口不支持时返回 null。Key 无效时抛出错误。
  */
 export async function getKeyInfo(cfg, signal) {
-  const res = await fetch(endpoint(cfg.apiBaseUrl, '/key'), { headers: headers(cfg), signal });
+  const url = endpoint(cfg.apiBaseUrl, '/key');
+  if (/^https:\/\/api\.tangguo\.xin\/v1\/key$/i.test(url)) return null;
+  const res = await fetch(url, { headers: headers(cfg), signal });
   if (res.status === 401 || res.status === 403) throw await readError(res);
   if (!res.ok) return null;
   let j;

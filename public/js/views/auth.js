@@ -77,7 +77,7 @@ function keyLoginView(container, cfg) {
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>
     <form novalidate>
-      <div class="field"><label for="k">API Key</label><input id="k" class="input mono" name="key" type="password" autocomplete="off" placeholder="sk-or-v1-..." required>
+      <div class="field"><label for="k">API Key</label><input id="k" class="input mono" name="key" type="password" autocomplete="off" placeholder="sk-..." required>
         <span class="hint">${esc(cfg.loginHint || '请输入分配给你的 API Key。')}</span></div>
       <div class="field"><label for="n">昵称（可选）</label><input id="n" class="input" name="nickname" maxlength="32" placeholder="怎么称呼你"></div>
       <div class="form-error"></div>

@@ -1,5 +1,5 @@
 // 纯静态模式的「后端」：在浏览器中实现与 server.js 相同的接口。
-// 账号 = API Key（各自的额度由模型平台管理，例如 OpenRouter 的 Key 额度上限），
+// 账号 = API Key，各自的额度由模型平台管理。
 // 项目和任务保存在浏览器 IndexedDB 中，智能体直接在页面里运行。
 import { Collection, idb, newId, sha256Hex } from './db.js';
 import { runAgent } from '../core/agent.js';
@@ -88,17 +88,12 @@ function publicUser() {
 
 async function models() {
   if (Array.isArray(SITE.models) && SITE.models.length) return SITE.models;
+  if (!session) return [];
   if (modelCache) return modelCache;
-  // 未配置模型列表时，从 OpenRouter 获取所有支持工具调用的模型
-  try {
-    const res = await fetch(SITE.apiBaseUrl.replace(/\/+$/, '') + '/models');
-    const j = await res.json();
-    const arr = (j.data || []).filter((m) => !m.supported_parameters || m.supported_parameters.includes('tools'));
-    modelCache = arr.map((m) => m.id).sort();
-  } catch {
-    modelCache = session ? await listModels(apiCfg()).catch(() => []) : [];
-  }
-  return modelCache;
+  const activeSession = session;
+  const list = await listModels(apiCfg(), AbortSignal.timeout(15000), { toolsOnly: true }).catch(() => null);
+  if (session === activeSession && list?.length) modelCache = list;
+  return list || [];
 }
 
 async function config() {
@@ -291,9 +286,13 @@ route(
     const nickname = String(body.nickname || '').trim().slice(0, 32);
     if (!key) throw new HttpError(400, '请输入 API Key');
     if (!SITE.apiBaseUrl) throw new HttpError(400, '站点尚未配置 API 地址（config.js）');
-    let info = null;
+    const cfg = { apiBaseUrl: SITE.apiBaseUrl, apiKey: key };
+    const signal = AbortSignal.timeout(15000);
+    let info;
+    let discoveredModels = null;
     try {
-      info = await getKeyInfo({ apiBaseUrl: SITE.apiBaseUrl, apiKey: key }, AbortSignal.timeout(15000));
+      info = await getKeyInfo(cfg, signal);
+      if (!info) discoveredModels = await listModels(cfg, signal, { toolsOnly: true });
     } catch (e) {
       if (e.status === 401 || e.status === 403) throw new HttpError(401, 'API Key 无效，请检查是否复制完整');
       throw new HttpError(502, `验证 Key 失败：${e.message}`);
@@ -305,6 +304,7 @@ route(
     await idb.put('accounts', acct);
     const s = { accountId, key, nickname: acct.nickname, createdAt: acct.createdAt };
     localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    modelCache = discoveredModels?.length ? discoveredModels : null;
     await activate(s);
     return { user: publicUser() };
   },
@@ -318,6 +318,7 @@ route(
     for (const r of runs.values()) r.controller.abort();
     localStorage.removeItem(SESSION_KEY);
     session = null;
+    modelCache = null;
     projects.items.clear();
     tasks.items.clear();
     return { ok: true };

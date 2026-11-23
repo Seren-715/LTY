@@ -743,7 +743,7 @@ route(
     try {
       const r = await llm.chat(
         { ...cfg, stream: false },
-        { model, messages: [{ role: 'user', content: '请只回复：连接成功' }], max_tokens: 20 },
+        { model, messages: [{ role: 'user', content: '请只回复：连接成功' }] },
         { signal: AbortSignal.timeout(60000) },
       );
       return { ok: true, model, reply: (r.content || r.reasoning || '').slice(0, 200), ms: Date.now() - started };
