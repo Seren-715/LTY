@@ -268,7 +268,7 @@ function repairHistory(history) {
   return out;
 }
 
-function buildMessages(rawHistory) {
+function buildMessages(rawHistory, anthropicModel) {
   const history = repairHistory(rawHistory);
   const toolIdx = [];
   history.forEach((m, i) => m.role === 'tool' && toolIdx.push(i));
@@ -280,6 +280,10 @@ function buildMessages(rawHistory) {
       out.content = out.content.slice(0, 1500) + '\n…（较早的工具输出已截断）';
     }
     if (m.role === 'assistant' && out.content == null) out.content = '';
+    if (anthropicModel && m.role === 'assistant' && m._anthropicModel === anthropicModel) {
+      out._anthropicBlocks = m._anthropicBlocks;
+    }
+    if (anthropicModel && m.role === 'tool') out._ok = m._ok;
     return out;
   });
 }
@@ -316,7 +320,7 @@ export async function runAgent({ task, project, config, signal, emit, saveTask, 
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const messages = [
       { role: 'system', content: systemPrompt({ siteName: config.siteName, project, mode, globalPrompt: config.systemPrompt }) },
-      ...buildMessages(task.history),
+      ...buildMessages(task.history, config.protocol === 'anthropic' ? task.model : null),
     ];
 
     emit({ type: 'assistant_start' });
@@ -333,6 +337,10 @@ export async function runAgent({ task, project, config, signal, emit, saveTask, 
     const msg = { role: 'assistant', content: r.content || '', _at: Date.now() };
     if (r.reasoning) msg._reasoning = r.reasoning;
     if (r.toolCalls.length) msg.tool_calls = r.toolCalls;
+    if (r.nativeBlocks?.length) {
+      msg._anthropicBlocks = r.nativeBlocks;
+      msg._anthropicModel = task.model;
+    }
     if (r.usage) {
       task.usage ||= { prompt: 0, completion: 0, cost: 0 };
       task.usage.prompt += r.usage.prompt_tokens || 0;

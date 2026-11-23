@@ -1,14 +1,11 @@
-// OpenAI 兼容的 Chat Completions 客户端（支持流式输出与工具调用，浏览器与 Node 通用）。
-// 兼容 OpenAI、DeepSeek、通义千问 DashScope 兼容模式、Moonshot、OpenRouter、各类中转等。
+// 模型客户端，支持 OpenAI Chat Completions 和 Anthropic Messages。
+import { chatAnthropic } from './anthropic.js';
 
 function endpoint(baseUrl, suffix) {
   let u = String(baseUrl || '').trim().replace(/\/+$/, '');
   if (!u) throw new Error('尚未配置 API 地址');
-  if (suffix === '/chat/completions') {
-    if (/\/chat\/completions$/.test(u)) return u;
-    return u + suffix;
-  }
-  u = u.replace(/\/chat\/completions$/, '');
+  if (/^https:\/\/api\.tangguo\.xin$/i.test(u)) u += '/v1';
+  u = u.replace(/\/(?:chat\/completions|messages)$/, '');
   return u + suffix;
 }
 
@@ -74,7 +71,9 @@ function finalizeToolCalls(list) {
  * handlers.onDelta(text) / handlers.onReasoning(text) 在流式输出时回调。
  * 返回 { content, reasoning, toolCalls, finishReason, usage }
  */
-export async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
+export async function chat(cfg, body, handlers = {}) {
+  if (cfg.protocol === 'anthropic') return chatAnthropic(cfg, body, handlers, { endpoint, readError, readSse });
+  const { signal, onDelta, onReasoning } = handlers;
   const payload = { ...body };
   if (cfg.stream !== false) payload.stream = true;
   // OpenRouter：在返回中附带本次花费
@@ -109,8 +108,6 @@ export async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
     };
   }
 
-  const decoder = new TextDecoder();
-  let buf = '';
   let content = '';
   let reasoning = '';
   let finishReason = null;
@@ -143,31 +140,47 @@ export async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
     if (choice.finish_reason) finishReason = choice.finish_reason;
   };
 
-  // 用 reader 逐块读取（Safari 不支持对 ReadableStream 使用 for await）
-  const reader = res.body.getReader();
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (line.startsWith('data:')) handleData(line.slice(5).trim());
-    }
-  }
-  const rest = buf.trim();
-  if (rest.startsWith('data:')) handleData(rest.slice(5).trim());
-
+  await readSse(res, handleData);
   return { content, reasoning, toolCalls: finalizeToolCalls(toolCalls), finishReason, usage };
 }
 
-export async function listModels(cfg, signal) {
-  const res = await fetch(endpoint(cfg.apiBaseUrl, '/models'), { headers: headers(cfg), signal });
+// 用 reader 逐块读取（Safari 不支持对 ReadableStream 使用 for await）。
+async function readSse(res, handleData) {
+  const decoder = new TextDecoder();
+  let buf = '';
+  const reader = res.body.getReader();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 1);
+        if (line.startsWith('data:')) handleData(line.slice(5).trim());
+      }
+    }
+    const rest = (buf + decoder.decode()).trim();
+    if (rest.startsWith('data:')) handleData(rest.slice(5).trim());
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function listModels(cfg, signal, { toolsOnly = false } = {}) {
+  const res = await fetch(endpoint(cfg.apiBaseUrl, '/models'), { headers: headers(cfg), signal, cache: 'no-store' });
   if (!res.ok) throw await readError(res);
   const j = await res.json();
   const arr = Array.isArray(j.data) ? j.data : Array.isArray(j.models) ? j.models : Array.isArray(j) ? j : [];
-  return arr.map((m) => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean).sort();
+  return arr
+    .filter((m) => m && (!toolsOnly || !Array.isArray(m.supported_parameters) || m.supported_parameters.includes('tools')))
+    .map((m) => (typeof m === 'string' ? m : m.id || m.name))
+    .filter(Boolean)
+    .sort();
 }
 
 /**
@@ -175,7 +188,9 @@ export async function listModels(cfg, signal) {
  * 返回 { label, limit, remaining, usage } ；接口不支持时返回 null。Key 无效时抛出错误。
  */
 export async function getKeyInfo(cfg, signal) {
-  const res = await fetch(endpoint(cfg.apiBaseUrl, '/key'), { headers: headers(cfg), signal });
+  const url = endpoint(cfg.apiBaseUrl, '/key');
+  if (/^https:\/\/api\.tangguo\.xin\/v1\/key$/i.test(url)) return null;
+  const res = await fetch(url, { headers: headers(cfg), signal });
   if (res.status === 401 || res.status === 403) throw await readError(res);
   if (!res.ok) return null;
   let j;

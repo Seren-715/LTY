@@ -13,9 +13,41 @@ const SUGGESTIONS = [
 ];
 
 export function modelOptions(selected) {
-  const models = state.config.models || [];
+  const { models = [], defaultModel } = state.config;
   if (!models.length) return '<option value="">未配置模型</option>';
-  return models.map((m) => `<option value="${esc(m)}" ${m === selected ? 'selected' : ''}>${esc(m)}</option>`).join('');
+  const current = models.includes(selected) ? selected : defaultModel;
+  return models.map((m) => `<option value="${esc(m)}" ${m === current ? 'selected' : ''}>${esc(m)}</option>`).join('');
+}
+
+export function modelRefreshButton() {
+  return state.config.mode === 'static'
+    ? `<button type="button" class="btn ghost sm refresh-models" title="刷新模型列表">${icon('refresh')}刷新模型</button>`
+    : '';
+}
+
+export function bindModelRefresh(container, modelSelect, onRefresh) {
+  const button = $(container, '.refresh-models');
+  if (!button) return;
+  const label = button.innerHTML;
+  button.onclick = async () => {
+    button.disabled = true;
+    modelSelect.disabled = true;
+    button.innerHTML = '<span class="spin"></span>刷新中';
+    try {
+      const config = await loadConfig({ refreshModels: true });
+      if (!button.isConnected) return;
+      modelSelect.innerHTML = modelOptions(modelSelect.value);
+      onRefresh?.(config);
+      if (config.models.length) toast('模型列表已刷新', 'success');
+      else toast('当前 API Key 没有可用的模型', 'error');
+    } catch (e) {
+      if (button.isConnected) toast(e.message || '刷新模型失败', 'error');
+    } finally {
+      button.innerHTML = label;
+      modelSelect.disabled = false;
+      button.disabled = false;
+    }
+  };
 }
 
 export async function homeView(container) {
@@ -28,21 +60,21 @@ export async function homeView(container) {
 
   let projectId = prefs.get('projectId');
   if (!state.projects.find((p) => p.id === projectId)) projectId = state.projects[0]?.id || '';
-  let model = prefs.get('model');
-  if (!cfg.models.includes(model)) model = cfg.defaultModel;
+  const model = prefs.get('model');
 
   container.innerHTML = `<div class="home">
     <div class="hero"><h1>接下来要写点什么？</h1></div>
-    ${
-      cfg.configured
-        ? ''
-        : `<div class="banner">${icon('key')}<span class="grow">尚未配置模型 API。${state.user.role === 'admin' ? '请前往 <a href="#/admin">站点管理</a> 填写 API 地址、Key 和模型。' : '请联系管理员完成配置。'}</span></div>`
-    }
+    <div class="banner model-notice ${cfg.configured ? 'hidden' : ''}">${icon('key')}<span class="grow">${
+      cfg.groupedModels
+        ? '当前 API Key 没有可用模型。请检查唐果分组，然后刷新模型。'
+        : `尚未配置模型 API。${cfg.user?.role === 'admin' ? '请前往 <a href="#/admin">站点管理</a> 填写 API 地址、Key 和模型。' : '请联系管理员完成配置。'}`
+    }</span></div>
     <div class="composer">
       <textarea placeholder="描述一个编码任务，例如：做一个带动画的个人主页…" rows="2"></textarea>
       <div class="composer-bar">
         <select class="select pill-select project" title="项目"></select>
         <select class="select pill-select model" title="模型">${modelOptions(model)}</select>
+        ${modelRefreshButton()}
         <span class="spacer"></span>
         <span class="kbd" title="Ctrl/⌘ + Enter 发送编码任务">${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'} ↵</span>
         <button class="btn" data-mode="ask" title="只读：回答问题，不修改文件">${icon('chat')}提问</button>
@@ -63,7 +95,9 @@ export async function homeView(container) {
   const fit = autosize(ta);
   const projSel = $(container, '.project');
   const modelSel = $(container, '.model');
+  const modelNotice = $(container, '.model-notice');
   const list = $(container, '.task-list');
+  bindModelRefresh(container, modelSel, (config) => modelNotice.classList.toggle('hidden', config.configured));
 
   const fillProjects = () => {
     projSel.innerHTML =
@@ -82,17 +116,19 @@ export async function homeView(container) {
     prefs.set('projectId', projectId);
   };
   modelSel.onchange = () => {
-    model = modelSel.value;
-    prefs.set('model', model);
+    prefs.set('model', modelSel.value);
   };
 
   async function submit(mode) {
+    if (modelSel.disabled) return;
     const prompt = ta.value.trim();
     if (!prompt) {
       ta.focus();
       return;
     }
-    if (!cfg.configured) return toast('尚未配置模型 API', 'error');
+    if (!state.config.configured) {
+      return toast(state.config.groupedModels ? '当前 API Key 没有可用模型，请检查分组后刷新。' : '尚未配置模型 API', 'error');
+    }
     container.querySelectorAll('[data-mode]').forEach((b) => (b.disabled = true));
     try {
       if (!projectId) {
@@ -101,7 +137,7 @@ export async function homeView(container) {
         prefs.set('projectId', projectId);
         await loadProjects();
       }
-      const task = await api.post('/api/tasks', { projectId, prompt, mode, model });
+      const task = await api.post('/api/tasks', { projectId, prompt, mode, model: modelSel.value });
       ta.value = '';
       navigate(`#/tasks/${task.id}`);
     } catch (e) {
