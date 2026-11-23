@@ -219,7 +219,7 @@ export function executeTool(name, args, ctx) {
   return { ok: false, output: '错误：未处理的工具调用' };
 }
 
-function systemPrompt({ siteName, project, mode, globalPrompt }) {
+function systemPrompt({ siteName, project, globalPrompt }) {
   const parts = [
     `你是「${siteName}」中的代码编写智能体，正在帮助用户在项目「${project.name}」中工作。`,
     '项目以虚拟文件系统的形式保存在服务器上。你只能通过提供的工具查看和修改文件，无法执行命令、运行代码或访问网络。',
@@ -232,9 +232,8 @@ function systemPrompt({ siteName, project, mode, globalPrompt }) {
     '- 完成后用简洁的中文总结：改了哪些文件、做了什么、如何运行或验证。',
     '- 用户使用什么语言提问，就用什么语言回答。',
     '',
-    mode === 'code'
-      ? '当前模式：编码。你可以创建、编辑和删除文件来完成任务。'
-      : '当前模式：提问。你只能读取文件，不能修改。请回答问题、解释代码或给出修改建议（可以在回复中给出代码片段）。',
+    '如果用户只是提问或讨论，直接回答即可，不要无故修改文件；需要动手实现时再创建、编辑或删除文件。',
+    '用户可能附带图片（截图、设计稿、报错界面等）或文件内容，请结合附件理解需求。',
   ];
   if (project.description) parts.push('', `项目简介：${project.description}`);
   if (project.instructions) parts.push('', '项目自定义指令：', project.instructions);
@@ -312,14 +311,14 @@ function parseArgs(raw) {
  * hooks: emit(event), saveTask(), saveProject()
  */
 export async function runAgent({ task, project, config, signal, emit, saveTask, saveProject }) {
-  const mode = task.mode === 'code' ? 'code' : 'ask';
-  const tools = mode === 'code' ? [...READ_TOOLS, ...WRITE_TOOLS] : READ_TOOLS;
+  const mode = 'code';
+  const tools = [...READ_TOOLS, ...WRITE_TOOLS];
   const maxSteps = Math.max(1, Math.min(100, parseInt(config.maxSteps, 10) || 30));
 
   for (let step = 0; step < maxSteps; step++) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const messages = [
-      { role: 'system', content: systemPrompt({ siteName: config.siteName, project, mode, globalPrompt: config.systemPrompt }) },
+      { role: 'system', content: systemPrompt({ siteName: config.siteName, project, globalPrompt: config.systemPrompt }) },
       ...buildMessages(task.history, config.protocol === 'anthropic' ? task.model : null),
     ];
 
@@ -378,4 +377,55 @@ export async function runAgent({ task, project, config, signal, emit, saveTask, 
   task.history.push(note);
   saveTask();
   emit({ type: 'message', message: note });
+}
+
+// ───────────── 用户消息（文字 + 附件） ─────────────
+
+export const ATTACH_LIMITS = { images: 8, imageBytes: 6 * 1024 * 1024, files: 10, fileChars: 300000 };
+
+function fenceFor(text) {
+  let f = '```';
+  while (text.includes(f)) f += '`';
+  return f;
+}
+
+/**
+ * 构造用户消息。attachments: [{ type: 'image', name, dataUrl } | { type: 'file', name, content }]
+ * - 文件内容以代码块形式拼接到文本中
+ * - 有图片时 content 为 OpenAI 多模态数组：[{type:'text'}, {type:'image_url'}...]
+ * - _text 保存用户原始输入，_files 保存文件名，用于界面展示
+ */
+export function buildUserMessage(prompt, attachments = []) {
+  const text = String(prompt || '').trim();
+  const list = Array.isArray(attachments) ? attachments : [];
+  const files = list.filter((a) => a && a.type === 'file' && typeof a.content === 'string');
+  const images = list.filter((a) => a && a.type === 'image' && /^data:image\/[\w.+-]+;base64,/.test(a.dataUrl || ''));
+  if (files.length > ATTACH_LIMITS.files) throw new Error(`一次最多附加 ${ATTACH_LIMITS.files} 个文件`);
+  if (images.length > ATTACH_LIMITS.images) throw new Error(`一次最多附加 ${ATTACH_LIMITS.images} 张图片`);
+  for (const f of files) if (f.content.length > ATTACH_LIMITS.fileChars) throw new Error(`文件 ${f.name} 过大`);
+  for (const i of images) if (i.dataUrl.length > ATTACH_LIMITS.imageBytes) throw new Error(`图片 ${i.name || ''} 过大`);
+  if (!text && !files.length && !images.length) throw new Error('请输入内容');
+
+  let full = text;
+  for (const f of files) {
+    const name = String(f.name || '附件').slice(0, 200);
+    const fence = fenceFor(f.content);
+    full += `${full ? '\n\n' : ''}附件文件 ${name}：\n${fence}\n${f.content}\n${fence}`;
+  }
+  const msg = { role: 'user', content: full, _text: text, _at: Date.now() };
+  if (images.length) {
+    msg.content = [
+      { type: 'text', text: full || '请看图片。' },
+      ...images.map((i) => ({ type: 'image_url', image_url: { url: i.dataUrl } })),
+    ];
+  }
+  if (files.length) msg._files = files.map((f) => ({ name: String(f.name || '附件').slice(0, 200), size: f.content.length }));
+  return msg;
+}
+
+/** 任务标题：取用户输入的第一行，没有文字时用附件名 */
+export function titleFromMessage(msg) {
+  const raw = msg._text || (typeof msg.content === 'string' ? msg.content : '') || msg._files?.[0]?.name || (Array.isArray(msg.content) ? '图片' : '');
+  const line = String(raw).replace(/\s+/g, ' ').trim();
+  return line.length > 48 ? line.slice(0, 48) + '…' : line || '新任务';
 }

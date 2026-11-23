@@ -52,7 +52,15 @@ const PATHS = {
   users: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8"/><path d="M22 21a7 7 0 0 0-4-6.3"/>',
   save: '<path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8"/><path d="M7 21v-7h10v7"/>',
   'file-plus': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15h6"/>',
-  external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+  screen: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  paperclip: '<path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>',
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  more: '<circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="12" r="1.2" fill="currentColor"/>',
+  compose: '<path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 15l-4 1 1-4z"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
 };
 
 export const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ''}</svg>`;
@@ -229,3 +237,24 @@ document.addEventListener('click', (e) => {
   const pre = b.closest('.code-block')?.querySelector('pre');
   if (pre) copyText(pre.innerText);
 });
+
+// 点击菜单外部时关闭所有弹出菜单（.menu > .menu-pop）
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.menu-pop:not(.hidden)').forEach((pop) => {
+    const owner = pop.closest('.menu') || pop.parentElement;
+    if (!owner.contains(e.target)) pop.classList.add('hidden');
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.querySelectorAll('.menu-pop:not(.hidden)').forEach((p) => p.classList.add('hidden'));
+});
+
+/** 绑定一个简单的下拉菜单：点击 trigger 切换 pop */
+export function bindMenu(trigger, pop) {
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = pop.classList.contains('hidden');
+    document.querySelectorAll('.menu-pop:not(.hidden)').forEach((p) => p !== pop && p.classList.add('hidden'));
+    pop.classList.toggle('hidden', !willOpen);
+  });
+}

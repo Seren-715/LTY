@@ -12,10 +12,10 @@ require('./lib/env').load(path.join(__dirname, '.env'));
 const { createStore, newId } = require('./lib/store');
 const auth = require('./lib/auth');
 // 智能体核心代码与前端共用（ES 模块，位于 public/js/core），在 bootstrap 中加载
-let runAgent, llm, diffStats, normPath, checkWrite, LIMITS, templateList, templateFiles;
+let runAgent, buildUserMessage, titleFromMessage, llm, diffStats, normPath, checkWrite, LIMITS, templateList, templateFiles;
 async function loadCore() {
   const core = (name) => import(require('url').pathToFileURL(path.join(__dirname, 'public/js/core', name)).href);
-  ({ runAgent } = await core('agent.js'));
+  ({ runAgent, buildUserMessage, titleFromMessage } = await core('agent.js'));
   llm = await core('llm.js');
   ({ diffStats } = await core('diff.js'));
   ({ normPath, checkWrite, LIMITS } = await core('files.js'));
@@ -220,10 +220,6 @@ function publicTask(t, full = false) {
   return out;
 }
 
-function makeTitle(prompt) {
-  const line = String(prompt).replace(/\s+/g, ' ').trim();
-  return line.length > 48 ? line.slice(0, 48) + '…' : line || '新任务';
-}
 
 // 运行中的任务：taskId -> { controller, listeners:Set<res>, partial }
 const runs = new Map();
@@ -539,18 +535,22 @@ route('GET', '/api/tasks', ({ user, query }) => {
 });
 
 route('POST', '/api/tasks', ({ user, body }) => {
-  const prompt = String(body.prompt || '').trim();
-  if (!prompt) throw new HttpError(400, '请输入任务描述');
+  let userMsg;
+  try {
+    userMsg = buildUserMessage(body.prompt, body.attachments);
+  } catch (e) {
+    throw new HttpError(400, e.message);
+  }
   const project = ownProject(user, body.projectId);
   const task = {
     id: newId(),
     ownerId: user.id,
     projectId: project.id,
-    title: makeTitle(prompt),
-    mode: body.mode === 'ask' ? 'ask' : 'code',
+    title: titleFromMessage(userMsg),
+    mode: 'code',
     model: pickModel(body.model),
     status: 'queued',
-    history: [{ role: 'user', content: prompt, _at: Date.now(), _mode: body.mode === 'ask' ? 'ask' : 'code' }],
+    history: [userMsg],
     changes: {},
     stats: { files: 0, added: 0, removed: 0 },
     createdAt: Date.now(),
@@ -582,12 +582,16 @@ route('DELETE', '/api/tasks/:id', ({ user, params }) => {
 route('POST', '/api/tasks/:id/messages', ({ user, params, body }) => {
   const t = ownTask(user, params.id);
   if (runs.has(t.id)) throw new HttpError(409, '任务正在运行，请等待完成或先停止');
-  const prompt = String(body.prompt || '').trim();
-  if (!prompt) throw new HttpError(400, '请输入内容');
-  if (body.mode === 'ask' || body.mode === 'code') t.mode = body.mode;
+  let userMsg;
+  try {
+    userMsg = buildUserMessage(body.prompt, body.attachments);
+  } catch (e) {
+    throw new HttpError(400, e.message);
+  }
+  t.mode = 'code';
   if (body.model) t.model = pickModel(body.model);
   if (!t.model) t.model = pickModel();
-  t.history.push({ role: 'user', content: prompt, _at: Date.now(), _mode: t.mode });
+  t.history.push(userMsg);
   startRun(t);
   return publicTask(t, true);
 });

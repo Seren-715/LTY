@@ -2,7 +2,7 @@
 // 账号 = API Key，各自的额度由模型平台管理。
 // 项目和任务保存在浏览器 IndexedDB 中，智能体直接在页面里运行。
 import { Collection, idb, newId, sha256Hex } from './db.js';
-import { runAgent } from '../core/agent.js';
+import { runAgent, buildUserMessage, titleFromMessage } from '../core/agent.js';
 import { getKeyInfo, listModels } from '../core/llm.js';
 import { diffStats } from '../core/diff.js';
 import { normPath, checkWrite, LIMITS } from '../core/files.js';
@@ -204,10 +204,6 @@ function publicTask(t, full = false) {
   return out;
 }
 
-function makeTitle(prompt) {
-  const line = String(prompt).replace(/\s+/g, ' ').trim();
-  return line.length > 48 ? line.slice(0, 48) + '…' : line || '新任务';
-}
 
 function broadcast(taskId, ev) {
   const run = runs.get(taskId);
@@ -530,20 +526,24 @@ route('GET', '/api/tasks', ({ query }) => {
 });
 
 route('POST', '/api/tasks', async ({ body }) => {
-  const prompt = String(body.prompt || '').trim();
-  if (!prompt) throw new HttpError(400, '请输入任务描述');
+  let userMsg;
+  try {
+    userMsg = buildUserMessage(body.prompt, body.attachments);
+  } catch (e) {
+    throw new HttpError(400, e.message);
+  }
   const model = await modelForRun(body.model);
   const project = ownProject(body.projectId);
-  const mode = body.mode === 'ask' ? 'ask' : 'code';
+  const mode = 'code';
   const task = {
     id: newId(),
     ownerId: session.accountId,
     projectId: project.id,
-    title: makeTitle(prompt),
+    title: titleFromMessage(userMsg),
     mode,
     model,
     status: 'queued',
-    history: [{ role: 'user', content: prompt, _at: Date.now(), _mode: mode }],
+    history: [userMsg],
     changes: {},
     stats: { files: 0, added: 0, removed: 0 },
     createdAt: Date.now(),
@@ -575,14 +575,18 @@ route('DELETE', '/api/tasks/:id', ({ params }) => {
 route('POST', '/api/tasks/:id/messages', async ({ params, body }) => {
   const t = ownTask(params.id);
   if (runs.has(t.id)) throw new HttpError(409, '任务正在运行，请等待完成或先停止');
-  const prompt = String(body.prompt || '').trim();
-  if (!prompt) throw new HttpError(400, '请输入内容');
+  let userMsg;
+  try {
+    userMsg = buildUserMessage(body.prompt, body.attachments);
+  } catch (e) {
+    throw new HttpError(400, e.message);
+  }
   const model = await modelForRun(body.model, t.model);
   ownTask(t.id);
   if (runs.has(t.id)) throw new HttpError(409, '任务正在运行，请等待完成或先停止');
-  if (body.mode === 'ask' || body.mode === 'code') t.mode = body.mode;
+  t.mode = 'code';
   t.model = model;
-  t.history.push({ role: 'user', content: prompt, _at: Date.now(), _mode: t.mode });
+  t.history.push(userMsg);
   startRun(t);
   return publicTask(t, true);
 });

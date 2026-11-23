@@ -11,6 +11,22 @@ function parseToolInput(value) {
   }
 }
 
+// OpenAI 多模态数组 → Anthropic 内容块
+function toAnthropicContent(content) {
+  if (!Array.isArray(content)) return content ? [{ type: 'text', text: content }] : [];
+  const blocks = [];
+  for (const part of content) {
+    if (part.type === 'text' && part.text) blocks.push({ type: 'text', text: part.text });
+    else if (part.type === 'image_url') {
+      const url = part.image_url?.url || '';
+      const m = url.match(/^data:([\w/.+-]+);base64,(.*)$/);
+      if (m) blocks.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+      else if (url) blocks.push({ type: 'image', source: { type: 'url', url } });
+    }
+  }
+  return blocks;
+}
+
 function toAnthropicMessages(messages) {
   const system = [];
   const turns = [];
@@ -32,7 +48,7 @@ function toAnthropicMessages(messages) {
     } else if (role === 'assistant' && message._anthropicBlocks?.length) {
       blocks = message._anthropicBlocks;
     } else {
-      blocks = message.content ? [{ type: 'text', text: message.content }] : [];
+      blocks = toAnthropicContent(message.content);
       for (const call of message.tool_calls || []) {
         blocks.push({ type: 'tool_use', id: call.id, name: call.function.name, input: parseToolInput(call.function.arguments) });
       }
