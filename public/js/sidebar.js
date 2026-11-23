@@ -32,7 +32,7 @@ export function createSidebar({ onLogout }) {
     <div class="sb-list"></div>
     <div class="sb-foot menu">
       <button class="sb-user">
-        <span class="avatar"></span>
+        <span class="avatar"><img src="img/avatar.jpg" alt=""></span>
         <span class="sb-user-meta"><span class="sb-user-name"></span><span class="sb-balance"></span></span>
         ${icon('more')}
       </button>
@@ -53,7 +53,6 @@ export function createSidebar({ onLogout }) {
     const u = state.user;
     if (!u) return;
     $(root, '.site-name').textContent = state.config?.siteName || 'RTY Code';
-    $(root, '.avatar').textContent = (u.username[0] || '?').toUpperCase();
     $(root, '.sb-user-name').textContent = u.username;
     root.querySelectorAll('.admin-link').forEach((a) => a.classList.toggle('hidden', u.role !== 'admin'));
   }

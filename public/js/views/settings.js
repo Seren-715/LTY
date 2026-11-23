@@ -13,7 +13,7 @@ export async function settingsView(container) {
       <h2>账号信息</h2>
       <p class="sub">你的基本信息</p>
       <div class="row" style="gap:14px">
-        <div class="avatar" style="width:48px;height:48px;font-size:20px;cursor:default">${esc(user.username[0].toUpperCase())}</div>
+        <div class="avatar lg"><img src="img/avatar.jpg" alt=""></div>
         <div class="grow"><div style="font-weight:600;font-size:15px">${esc(user.username)}</div>
           <div class="muted" style="font-size:13px">${user.role === 'admin' ? '管理员' : '普通用户'} · 注册于 ${formatDate(user.createdAt)}</div></div>
         <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
@@ -61,7 +61,7 @@ async function staticSettings(container) {
       <h2>账号</h2>
       <p class="sub">你的账号由 API Key 识别，数据保存在本浏览器中</p>
       <div class="row" style="gap:14px;flex-wrap:wrap">
-        <div class="avatar" style="width:48px;height:48px;font-size:20px;cursor:default">${esc((user.username[0] || '?').toUpperCase())}</div>
+        <div class="avatar lg"><img src="img/avatar.jpg" alt=""></div>
         <div class="grow"><div style="font-weight:600;font-size:15px">${esc(user.username)} <button class="btn ghost sm" data-act="rename">${icon('edit')}改昵称</button></div>
           <div class="muted mono" style="font-size:12.5px">${esc(masked)}</div></div>
         <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
