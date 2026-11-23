@@ -1,40 +1,92 @@
 # RTY Code · 代码编写智能体网站
 
-一个类似 Codex 的 AI 编码智能体网站，界面采用浅蓝 + 白配色。用户登录后创建项目、描述任务，智能体会自动阅读和修改项目文件，并实时展示思考过程、工具调用、代码变更和网页预览。
+一个类似 Codex 的 AI 编码智能体网站，界面采用浅蓝 + 白配色。登录后创建项目、描述任务，智能体会自动阅读和修改项目文件，并实时展示思考过程、工具调用、代码变更和网页预览。
 
-- **零依赖**：只需要 Node.js 18.17+，不用 `npm install`，没有构建步骤
-- **API Key 只保存在服务器**：浏览器不会拿到 Key，所有模型请求都由后端转发
-- **兼容任何 OpenAI 格式接口**：OpenAI、DeepSeek、通义千问（DashScope 兼容模式）、Moonshot、智谱、OpenRouter、各类中转 / 自建网关
+网站有两种运行模式，代码是同一份：
+
+| | **纯静态模式（推荐给同学共用）** | 服务器模式（可选） |
+| --- | --- | --- |
+| 部署 | 上传 `public/` 文件夹到任意静态托管（如 Qoder 个人站点），**不需要服务器** | 运行 `server.js`（Node.js 18.17+ 或 Docker） |
+| 账号 | 用你分发的 API Key 登录，每人一个 Key | 用户名 + 密码注册登录 |
+| 余额 | 由 API 平台管理（如 OpenRouter 给每个 Key 设额度上限），网站显示剩余额度 | 所有人共用站长的 Key，不限额 |
+| 智能体 | 在浏览器里运行，关掉页面任务停止 | 在服务器后台运行 |
+| 数据 | 保存在各自浏览器（IndexedDB），可导出 / 导入备份 | 保存在服务器 `data/` 目录 |
+
+`public/config.js` 中的 `mode: 'auto'` 会自动判断：能连上 `server.js` 就用服务器模式，否则用纯静态模式。
 
 ## 功能
 
 | 模块 | 说明 |
 | --- | --- |
-| 账号 | 注册 / 登录 / 退出、修改密码；第一个注册的账号自动成为管理员；会话 Cookie（HttpOnly），登录失败限流 |
-| 任务 | 首页输入任务，可选「提问」（只读）或「编码」（可改文件）模式；任务在后台运行，可同时跑多个；支持追问、停止、失败重试、重命名、归档、搜索 |
+| 账号 | 静态模式：API Key 登录、昵称、顶栏显示剩余额度、数据导出 / 导入；服务器模式：注册 / 登录 / 修改密码，首个账号为管理员 |
+| 任务 | 首页输入任务，可选「提问」（只读）或「编码」（可改文件）模式；可同时跑多个；支持追问、停止、失败重试、重命名、归档、搜索；显示每个任务的花费 |
 | 智能体 | 通过工具调用读写项目文件：`list_files` / `read_file` / `search_files` / `write_file` / `edit_file` / `delete_file`；流式输出，显示思考过程（reasoning） |
 | 变更 | 每个任务的代码 diff（新增/删除行数统计），可以按文件或整体撤销 |
 | 预览 | 网页项目在沙箱 iframe 中直接运行，支持多页面跳转，并带控制台输出 |
 | 项目 | 新建项目（空白 / 网页 / Node.js / Python 模板），在线编辑器（语法高亮、Ctrl+S 保存），上传文件（支持拖拽），下载 ZIP，项目自定义指令 / `AGENTS.md` |
-| 管理 | 在网页中配置 API 地址、Key、模型列表（可从接口一键拉取）、测试连接；开关注册；添加 / 删除用户、重置密码、设置管理员 |
+| 管理（服务器模式） | 在网页中配置 API 地址、Key、模型列表、测试连接；开关注册；用户管理 |
 
-## 快速开始（本地）
+## 纯静态模式：部署给同学用
+
+### 1. 准备 OpenRouter
+
+1. 注册 [OpenRouter](https://openrouter.ai)，在 **Credits** 页面充值（这是所有同学共用的钱包）。
+2. 打开 **Settings → API Keys**，为每个同学点 **Create Key**：
+   - **Name** 填同学的名字，方便你在后台区分谁用了多少；
+   - **Credit limit** 填这个同学的额度（例如 5 美元），用完后该 Key 的请求会被拒绝，不会多花你的钱。
+3. 把 Key 发给对应的同学（Key 只在创建时显示一次，请先保存好）。
+
+之后的管理都在 OpenRouter 后台完成：
+
+| 想做的事 | 在 OpenRouter 后台怎么操作 |
+| --- | --- |
+| 给同学充值 | 编辑该 Key，调高 Credit limit |
+| 查看谁用了多少 | Activity 页面，或 API Keys 列表中每个 Key 的用量 |
+| 停用某个同学 | 禁用或删除他的 Key |
+
+### 2. 修改 `public/config.js`
+
+```js
+window.RTY_CONFIG = {
+  mode: 'auto',
+  siteName: 'RTY Code',
+  apiBaseUrl: 'https://openrouter.ai/api/v1',
+  models: ['deepseek/deepseek-chat', 'openai/gpt-4o-mini'], // 留空 [] 则自动列出所有支持工具调用的模型
+  defaultModel: '',
+  maxSteps: 30,
+  systemPrompt: '',
+  loginHint: '请输入分配给你的 API Key。没有 Key？请联系站点管理员。',
+};
+```
+
+模型 ID 可以在 [openrouter.ai/models](https://openrouter.ai/models) 查询（筛选支持 Tools 的模型）。编码模式需要模型支持工具调用。
+
+### 3. 上传
+
+把 **`public/` 文件夹里的全部内容**上传到 Qoder 个人站点（或任何静态网站托管，如 GitHub Pages）。不需要安装依赖，也没有构建步骤。
+
+本地预览：
+
+```bash
+cd public && python3 -m http.server 8080   # 打开 http://localhost:8080
+```
+
+> 注意：
+> - 站点最好使用 HTTPS（静态托管平台一般默认提供）。
+> - 同学的数据保存在各自的浏览器里，**清除浏览器数据会丢失**，换电脑前请在「账号设置 → 导出备份」。
+> - 浏览器会直接请求模型接口，接口需要允许跨域（OpenRouter 支持）。如果换成其他平台出现「无法连接模型接口」，多半是该平台不允许浏览器直连。
+> - 同学的 Key 只保存在他自己的浏览器中，其他同学看不到。
+
+## 服务器模式：快速开始（可选）
 
 ```bash
 cp .env.example .env     # 填写 API_BASE_URL / API_KEY / MODELS（也可以稍后在网页中填写）
 npm start                # 打开 http://localhost:3000
 ```
 
-首次打开会进入注册页，**第一个注册的账号就是管理员**。登录后进入「管理」页面填写：
+首次打开会进入注册页，**第一个注册的账号就是管理员**。登录后进入「管理」页面填写 API 地址、Key、模型列表，点「测试连接」确认可用，然后「保存配置」。
 
-1. **API 地址**：例如 `https://api.openai.com/v1`、`https://api.deepseek.com/v1`、`https://dashscope.aliyuncs.com/compatible-mode/v1`
-2. **API Key**
-3. **模型列表**：点「从接口拉取模型」选择，或手动填写，每行一个
-4. 点「测试连接」确认可用，然后「保存配置」
-
-> 编码模式依赖模型的工具调用（function calling）能力，请选择支持工具调用的模型。
-
-## 部署到 Qoder 个人站点（或任意 Node.js 托管）
+## 服务器模式部署（任意 Node.js 托管）
 
 本项目是一个标准的 Node.js Web 服务，部署时只需要：
 
@@ -106,24 +158,29 @@ location / {
 ## 目录结构
 
 ```
-server.js            HTTP 服务、路由、任务运行与 SSE 推送
-lib/
-  agent.js           智能体循环、工具定义与执行、系统提示词
-  llm.js             OpenAI 兼容客户端（流式、工具调用、拉取模型列表）
-  auth.js            密码哈希（scrypt）、会话、限流
-  store.js           JSON 文件存储
-  files.js           虚拟文件系统路径校验与大小限制
-  diff.js            行级 diff 统计
-  templates.js       新建项目模板
-public/
+server.js            （服务器模式）HTTP 服务、路由、任务运行与 SSE 推送
+lib/                 （服务器模式）密码哈希、会话、JSON 文件存储、.env 读取
+public/              ← 纯静态模式只需要上传这个文件夹
+  config.js          站点配置（运行模式、API 地址、模型列表）
   index.html
   css/style.css      浅蓝 + 白主题
   js/app.js          前端路由与顶栏
+  js/api.js          接口层：服务器模式走 HTTP，静态模式走浏览器内实现
+  js/core/           前后端共用：智能体循环与工具、OpenAI 兼容客户端、文件校验、diff、项目模板
+  js/local/          纯静态模式的浏览器内「后端」（IndexedDB 存储、Key 登录、额度查询、备份）
   js/views/*.js      登录、首页、任务、项目、设置、管理页面
   js/*.js            Markdown、语法高亮、diff、预览、ZIP 等组件
 ```
 
 ## 安全说明
+
+纯静态模式：
+
+- 每个同学的 Key 只保存在自己浏览器的 localStorage 中，不经过本站；退出登录即删除
+- 额度由 API 平台在服务端强制执行，前端无法绕过
+- 预览在沙箱 iframe 中运行，项目代码无法读取 Key
+
+服务器模式：
 
 - 密码使用 scrypt 加盐哈希；会话令牌在服务器只存哈希
 - 修改类请求需要自定义请求头，防止 CSRF；Cookie 为 HttpOnly + SameSite=Lax（HTTPS 下自动加 Secure）

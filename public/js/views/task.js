@@ -100,6 +100,7 @@ export async function taskView(container, id) {
       <span class="badge mode">${icon('folder')}${esc(task.projectName)}</span>
       <span class="badge mode">${task.mode === 'ask' ? '提问' : '编码'}</span>
       ${task.model ? `<span class="badge mode mono" style="font-size:11.5px">${esc(task.model)}</span>` : ''}
+      ${task.usage?.cost ? `<span class="badge mode" title="本任务累计花费">花费 $${task.usage.cost.toFixed(4)}</span>` : ''}
       ${statsHtml(task.stats)}`;
     $(container, '.actions').innerHTML = `
       ${running() ? `<button class="btn sm" data-act="stop">${icon('stop')}停止</button>` : ''}

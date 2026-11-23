@@ -1,5 +1,5 @@
 // 入口：路由与顶栏
-import { api, setUnauthorizedHandler } from './api.js';
+import { api, setUnauthorizedHandler, initBackend, getMode } from './api.js';
 import { esc, el, $, icon, toast } from './ui.js';
 import { state, loadConfig, navigate } from './state.js';
 import { authView } from './views/auth.js';
@@ -38,6 +38,7 @@ function renderShell(active) {
           <a href="#/admin" data-nav="admin" class="admin-link">管理</a>
         </nav>
         <span class="spacer"></span>
+        <a class="balance-chip hidden" href="#/settings" title="Key 剩余额度"></a>
         <div class="menu">
           <button class="avatar" title="账号"></button>
           <div class="menu-pop hidden">
@@ -66,7 +67,8 @@ function renderShell(active) {
   $(shellEl, '.site-name').textContent = state.config.siteName;
   $(shellEl, '.avatar').textContent = (u.username[0] || '?').toUpperCase();
   $(shellEl, '.menu-user').textContent = u.username;
-  $(shellEl, '.menu-role').textContent = isAdmin ? '管理员' : '普通用户';
+  $(shellEl, '.menu-role').textContent = getMode() === 'static' ? '使用自己的 API Key' : isAdmin ? '管理员' : '普通用户';
+  refreshBalance();
   shellEl.querySelectorAll('.admin-link').forEach((a) => a.classList.toggle('hidden', !isAdmin));
   shellEl.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === active));
   if (!app.contains(shellEl)) {
@@ -75,6 +77,26 @@ function renderShell(active) {
   }
   return $(shellEl, '#view');
 }
+
+// 顶栏余额（静态模式下读取 Key 的剩余额度）
+let balanceAt = 0;
+export async function refreshBalance(force = false) {
+  const chip = shellEl && $(shellEl, '.balance-chip');
+  if (!chip || getMode() !== 'static') return;
+  if (!force && Date.now() - balanceAt < 30000) return;
+  balanceAt = Date.now();
+  try {
+    const b = await api.get('/api/balance');
+    if (b.unsupported) return chip.classList.add('hidden');
+    chip.classList.remove('hidden');
+    chip.classList.toggle('low', b.remaining != null && b.remaining < 0.2);
+    const money = (n) => '$' + Number(n || 0).toFixed(2);
+    chip.innerHTML = b.remaining != null ? `余额 <b>${money(b.remaining)}</b>` : `已用 <b>${money(b.usage)}</b>`;
+  } catch {
+    chip.classList.add('hidden');
+  }
+}
+window.addEventListener('rty:task-end', () => refreshBalance(true));
 
 async function router() {
   if (cleanup) {
@@ -102,8 +124,11 @@ async function router() {
     container = el('<div></div>');
     app.appendChild(container);
   } else {
-    container = renderShell(r.nav);
-    container.innerHTML = '';
+    // 每个页面使用全新的容器，避免页面在共享容器上重复绑定事件
+    const main = renderShell(r.nav);
+    main.innerHTML = '';
+    container = el('<div class="view-root"></div>');
+    main.appendChild(container);
   }
   window.scrollTo(0, 0);
   try {
@@ -124,6 +149,7 @@ setUnauthorizedHandler(() => {
 
 (async function start() {
   try {
+    await initBackend();
     await loadConfig();
   } catch (e) {
     app.innerHTML = `<div class="loading-page"><div><div class="error-box">无法连接服务器：${esc(e.message)}</div></div></div>`;

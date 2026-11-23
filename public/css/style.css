@@ -135,6 +135,12 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .menu-item:hover { background: var(--surface-2); text-decoration: none; }
 .menu-item.danger { color: var(--red); }
 
+.balance-chip { padding: 5px 12px; border-radius: 999px; background: var(--primary-softer); border: 1px solid #cfe2fb; color: var(--text-2); font-size: 13px; white-space: nowrap; }
+.balance-chip b { color: var(--primary); font-family: var(--mono); }
+.balance-chip:hover { text-decoration: none; background: var(--primary-soft); }
+.balance-chip.low { background: var(--amber-soft); border-color: #f6dfae; }
+.balance-chip.low b { color: var(--amber); }
+
 main#view { min-height: calc(100vh - var(--topbar-h)); }
 
 /* ============ 首页 ============ */
@@ -402,6 +408,8 @@ a.card:hover { text-decoration: none; border-color: #bcd3f1; box-shadow: var(--s
 .table th { text-align: left; font-weight: 600; color: var(--text-3); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .table td { padding: 10px; border-bottom: 1px solid var(--border); }
 .table tr:last-child td { border-bottom: 0; }
+.meter { height: 8px; border-radius: 999px; background: var(--surface-3); margin-top: 14px; overflow: hidden; }
+.meter span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #5aa6ff, var(--primary)); }
 .result-box { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 .result-box.ok { background: var(--green-soft); color: #0b6b37; }
 .result-box.err { background: var(--red-soft); color: #a32525; }

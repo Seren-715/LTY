@@ -1,9 +1,11 @@
 // 账号设置
-import { api } from '../api.js';
-import { esc, $, icon, toast, formatDate } from '../ui.js';
+import { api, getMode } from '../api.js';
+import { esc, $, icon, toast, formatDate, confirmDialog, promptDialog } from '../ui.js';
+import { downloadBlob } from '../zip.js';
 import { state, navigate } from '../state.js';
 
 export async function settingsView(container) {
+  if (getMode() === 'static') return staticSettings(container);
   const { user } = await api.get('/api/auth/me');
   container.innerHTML = `<div class="settings">
     <div class="page-head"><h1>账号设置</h1></div>
@@ -44,6 +46,106 @@ export async function settingsView(container) {
       toast('密码已更新', 'success');
     } catch (err) {
       toast(err.message, 'error');
+    }
+  };
+}
+
+// —— 纯静态模式：余额、昵称、数据备份 ——
+async function staticSettings(container) {
+  const { user } = await api.get('/api/auth/me');
+  const { masked } = await api.get('/api/session/key');
+  const money = (n) => '$' + Number(n || 0).toFixed(4).replace(/0{1,2}$/, '');
+  container.innerHTML = `<div class="settings">
+    <div class="page-head"><h1>账号设置</h1></div>
+    <div class="card">
+      <h2>账号</h2>
+      <p class="sub">你的账号由 API Key 识别，数据保存在本浏览器中</p>
+      <div class="row" style="gap:14px;flex-wrap:wrap">
+        <div class="avatar" style="width:48px;height:48px;font-size:20px;cursor:default">${esc((user.username[0] || '?').toUpperCase())}</div>
+        <div class="grow"><div style="font-weight:600;font-size:15px">${esc(user.username)} <button class="btn ghost sm" data-act="rename">${icon('edit')}改昵称</button></div>
+          <div class="muted mono" style="font-size:12.5px">${esc(masked)}</div></div>
+        <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>${icon('key')} 额度</h2>
+      <p class="sub">由 API 平台统计，可能有几分钟延迟。额度不足时请联系发 Key 给你的人充值。</p>
+      <div class="balance-box"><span class="muted"><span class="spin"></span> 正在查询…</span></div>
+      <div class="actions" style="margin-top:12px"><button class="btn sm" data-act="refresh">${icon('refresh')}刷新</button></div>
+    </div>
+    <div class="card">
+      <h2>${icon('save')} 数据备份</h2>
+      <p class="sub">项目和任务只保存在当前浏览器中。清除浏览器数据或换电脑前，请先导出备份。</p>
+      <div class="actions">
+        <button class="btn primary" data-act="export">${icon('download')}导出备份</button>
+        <button class="btn" data-act="import">${icon('upload')}导入备份</button>
+        <input type="file" accept=".json,application/json" class="hidden imp">
+        <span class="spacer"></span>
+        <button class="btn danger" data-act="wipe">${icon('trash')}清空本地数据</button>
+      </div>
+    </div>
+  </div>`;
+
+  const box = $(container, '.balance-box');
+  const loadBalance = async () => {
+    box.innerHTML = '<span class="muted"><span class="spin"></span> 正在查询…</span>';
+    try {
+      const b = await api.get('/api/balance');
+      if (b.unsupported) {
+        box.innerHTML = '<span class="muted">当前 API 平台不支持查询额度，请到平台官网查看。</span>';
+        return;
+      }
+      const pct = b.limit ? Math.max(0, Math.min(100, (b.remaining / b.limit) * 100)) : null;
+      box.innerHTML = `<div class="form-grid">
+        <div><div class="muted" style="font-size:12.5px">剩余额度</div><div style="font-size:24px;font-weight:650;color:var(--primary)">${b.remaining != null ? money(b.remaining) : '不限额'}</div></div>
+        <div><div class="muted" style="font-size:12.5px">已使用 / 上限</div><div style="font-size:24px;font-weight:650">${money(b.usage)} <span class="muted" style="font-size:15px;font-weight:500">/ ${b.limit != null ? money(b.limit) : '∞'}</span></div></div>
+      </div>${pct != null ? `<div class="meter"><span style="width:${pct}%"></span></div>` : ''}`;
+    } catch (e) {
+      box.innerHTML = `<div class="error-box" style="margin:0">${esc(e.message)}</div>`;
+    }
+  };
+  loadBalance();
+
+  container.addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'refresh') loadBalance();
+    else if (act === 'logout') {
+      if (!(await confirmDialog('退出后需要重新输入 API Key 才能登录。本地数据会保留。', { okText: '退出' }))) return;
+      await api.post('/api/auth/logout');
+      state.user = null;
+      navigate('#/login');
+    } else if (act === 'rename') {
+      const n = await promptDialog('修改昵称', { value: user.username });
+      if (!n) return;
+      try {
+        const r = await api.post('/api/auth/nickname', { nickname: n });
+        state.user = r.user;
+        navigate('#/settings');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    } else if (act === 'export') {
+      const data = await api.get('/api/backup');
+      const d = new Date();
+      const name = `rty-code-备份-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
+      downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), name);
+      toast(`已导出 ${data.projects.length} 个项目、${data.tasks.length} 个任务`, 'success');
+    } else if (act === 'import') $(container, '.imp').click();
+    else if (act === 'wipe') {
+      if (!(await confirmDialog('清空当前账号在本浏览器中的所有项目和任务？此操作不可恢复，建议先导出备份。', { danger: true, okText: '清空' }))) return;
+      await api.del('/api/backup');
+      toast('已清空本地数据');
+    }
+  });
+  $(container, '.imp').onchange = async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const r = await api.post('/api/backup', JSON.parse(await f.text()));
+      toast(`已导入 ${r.projects} 个项目、${r.tasks} 个任务`, 'success');
+    } catch (err) {
+      toast(err instanceof SyntaxError ? '文件不是合法的 JSON' : err.message, 'error');
     }
   };
 }

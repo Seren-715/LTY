@@ -1,11 +1,12 @@
 // 登录 / 注册
-import { api } from '../api.js';
+import { api, getMode } from '../api.js';
 import { esc, $, icon, toast } from '../ui.js';
 import { state, loadConfig, navigate } from '../state.js';
 
 export async function authView(container) {
   await loadConfig().catch(() => {});
   const cfg = state.config;
+  if (getMode() === 'static') return keyLoginView(container, cfg);
   let mode = cfg.hasUsers ? 'login' : 'register';
 
   container.innerHTML = `<div class="auth-page"><div class="auth-card">
@@ -65,6 +66,47 @@ export async function authView(container) {
       errEl.textContent = err.message;
     } finally {
       submit.disabled = false;
+    }
+  });
+}
+
+// 纯静态模式：用 API Key 登录
+function keyLoginView(container, cfg) {
+  container.innerHTML = `<div class="auth-page"><div class="auth-card">
+    <div class="logo">${icon('logo')}</div>
+    <h1>${esc(cfg.siteName)}</h1>
+    <p class="tagline">你的 AI 代码编写智能体</p>
+    <form novalidate>
+      <div class="field"><label for="k">API Key</label><input id="k" class="input mono" name="key" type="password" autocomplete="off" placeholder="sk-or-v1-..." required>
+        <span class="hint">${esc(cfg.loginHint || '请输入分配给你的 API Key。')}</span></div>
+      <div class="field"><label for="n">昵称（可选）</label><input id="n" class="input" name="nickname" maxlength="32" placeholder="怎么称呼你"></div>
+      <div class="form-error"></div>
+      <button class="btn primary block" type="submit">登录</button>
+    </form>
+    <div class="banner info" style="margin:16px 0 0;align-items:flex-start">${icon('shield')}<span>Key 只保存在你自己的浏览器里，不会上传到本站。你的项目和任务也保存在本浏览器中，换设备前请在「账号设置」中导出备份。</span></div>
+  </div></div>`;
+  const form = $(container, 'form');
+  const errEl = $(container, '.form-error');
+  const submit = $(form, 'button[type=submit]');
+  setTimeout(() => form.key.focus(), 50);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errEl.textContent = '';
+    const key = form.key.value.trim();
+    if (!key) return (errEl.textContent = '请输入 API Key');
+    submit.disabled = true;
+    submit.textContent = '正在验证…';
+    try {
+      const r = await api.post('/api/auth/login', { key, nickname: form.nickname.value.trim() });
+      state.user = r.user;
+      await loadConfig();
+      toast(`欢迎，${r.user.username}！`, 'success');
+      navigate('#/');
+    } catch (err) {
+      errEl.textContent = err.message;
+    } finally {
+      submit.disabled = false;
+      submit.textContent = '登录';
     }
   });
 }

@@ -1,7 +1,6 @@
-'use strict';
-// 代码智能体：在项目虚拟文件系统上通过工具调用完成编码任务
-const { chat } = require('./llm');
-const { normPath, checkWrite, sortedPaths } = require('./files');
+// 代码智能体：在项目虚拟文件系统上通过工具调用完成编码任务（浏览器与 Node 通用）
+import { chat } from './llm.js';
+import { normPath, checkWrite, sortedPaths } from './files.js';
 
 const READ_TOOLS = [
   {
@@ -108,7 +107,7 @@ function fileList(files) {
 }
 
 /** 执行一次工具调用，返回 { ok, output, changed } */
-function executeTool(name, args, ctx) {
+export function executeTool(name, args, ctx) {
   const { project, task, mode } = ctx;
   const files = project.files;
   const record = (path, after) => {
@@ -308,7 +307,7 @@ function parseArgs(raw) {
  * 运行智能体循环。
  * hooks: emit(event), saveTask(), saveProject()
  */
-async function runAgent({ task, project, config, signal, emit, saveTask, saveProject }) {
+export async function runAgent({ task, project, config, signal, emit, saveTask, saveProject }) {
   const mode = task.mode === 'code' ? 'code' : 'ask';
   const tools = mode === 'code' ? [...READ_TOOLS, ...WRITE_TOOLS] : READ_TOOLS;
   const maxSteps = Math.max(1, Math.min(100, parseInt(config.maxSteps, 10) || 30));
@@ -335,9 +334,11 @@ async function runAgent({ task, project, config, signal, emit, saveTask, savePro
     if (r.reasoning) msg._reasoning = r.reasoning;
     if (r.toolCalls.length) msg.tool_calls = r.toolCalls;
     if (r.usage) {
-      task.usage ||= { prompt: 0, completion: 0 };
+      task.usage ||= { prompt: 0, completion: 0, cost: 0 };
       task.usage.prompt += r.usage.prompt_tokens || 0;
       task.usage.completion += r.usage.completion_tokens || 0;
+      // OpenRouter 等平台会在 usage.cost 中返回本次花费（美元）
+      if (typeof r.usage.cost === 'number') task.usage.cost = (task.usage.cost || 0) + r.usage.cost;
     }
     task.history.push(msg);
     saveTask();
@@ -370,5 +371,3 @@ async function runAgent({ task, project, config, signal, emit, saveTask, savePro
   saveTask();
   emit({ type: 'message', message: note });
 }
-
-module.exports = { runAgent, executeTool };

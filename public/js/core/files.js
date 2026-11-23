@@ -1,13 +1,15 @@
-'use strict';
-// 项目虚拟文件系统的公共工具
+// 项目虚拟文件系统的公共工具（浏览器与 Node 通用）
 
-const LIMITS = {
+const enc = new TextEncoder();
+const byteLength = (s) => enc.encode(s).length;
+
+export const LIMITS = {
   maxFileBytes: 1024 * 1024, // 单文件 1MB
   maxFiles: 500,
   maxProjectBytes: 20 * 1024 * 1024, // 单项目 20MB
 };
 
-function normPath(p) {
+export function normPath(p) {
   if (typeof p !== 'string') throw new Error('path 必须是字符串');
   const s = p.replace(/\\/g, '/').trim();
   const parts = [];
@@ -23,17 +25,17 @@ function normPath(p) {
   return out;
 }
 
-function projectBytes(files) {
+export function projectBytes(files) {
   let n = 0;
-  for (const v of Object.values(files)) n += Buffer.byteLength(v, 'utf8');
+  for (const v of Object.values(files)) n += byteLength(v);
   return n;
 }
 
 // 写入前校验大小与数量限制；返回规范化后的路径
-function checkWrite(files, path, content) {
+export function checkWrite(files, path, content) {
   if (typeof content !== 'string') throw new Error('content 必须是字符串');
   const p = normPath(path);
-  const size = Buffer.byteLength(content, 'utf8');
+  const size = byteLength(content);
   if (size > LIMITS.maxFileBytes) throw new Error(`文件超过 ${LIMITS.maxFileBytes / 1024}KB 的大小限制`);
   if (!(p in files) && Object.keys(files).length >= LIMITS.maxFiles) {
     throw new Error(`项目文件数量已达上限 ${LIMITS.maxFiles}`);
@@ -46,15 +48,13 @@ function checkWrite(files, path, content) {
   }
   const prefix = p + '/';
   if (Object.keys(files).some((k) => k.startsWith(prefix))) throw new Error(`"${p}" 是目录，不能写成文件`);
-  const old = p in files ? Buffer.byteLength(files[p], 'utf8') : 0;
+  const old = p in files ? byteLength(files[p]) : 0;
   if (projectBytes(files) - old + size > LIMITS.maxProjectBytes) {
     throw new Error(`项目总大小超过 ${LIMITS.maxProjectBytes / 1024 / 1024}MB 的限制`);
   }
   return p;
 }
 
-function sortedPaths(files) {
+export function sortedPaths(files) {
   return Object.keys(files).sort((a, b) => a.localeCompare(b));
 }
-
-module.exports = { LIMITS, normPath, checkWrite, sortedPaths, projectBytes };

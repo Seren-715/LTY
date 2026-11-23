@@ -1,4 +1,3 @@
-'use strict';
 // 新建项目时可选的初始模板
 
 const templates = {
@@ -118,12 +117,10 @@ python main.py
   },
 };
 
-function templateList() {
+export function templateList() {
   return Object.entries(templates).map(([id, t]) => ({ id, label: t.label }));
 }
 
-function templateFiles(id) {
+export function templateFiles(id) {
   return { ...(templates[id] || templates.blank).files };
 }
-
-module.exports = { templateList, templateFiles };

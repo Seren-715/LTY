@@ -11,11 +11,16 @@ require('./lib/env').load(path.join(__dirname, '.env'));
 
 const { createStore, newId } = require('./lib/store');
 const auth = require('./lib/auth');
-const { runAgent } = require('./lib/agent');
-const llm = require('./lib/llm');
-const { diffStats } = require('./lib/diff');
-const { normPath, checkWrite, LIMITS } = require('./lib/files');
-const { templateList, templateFiles } = require('./lib/templates');
+// 智能体核心代码与前端共用（ES 模块，位于 public/js/core），在 bootstrap 中加载
+let runAgent, llm, diffStats, normPath, checkWrite, LIMITS, templateList, templateFiles;
+async function loadCore() {
+  const core = (name) => import(require('url').pathToFileURL(path.join(__dirname, 'public/js/core', name)).href);
+  ({ runAgent } = await core('agent.js'));
+  llm = await core('llm.js');
+  ({ diffStats } = await core('diff.js'));
+  ({ normPath, checkWrite, LIMITS } = await core('files.js'));
+  ({ templateList, templateFiles } = await core('templates.js'));
+}
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -334,6 +339,7 @@ route(
   ({ user }) => {
     const cfg = config();
     return {
+      mode: 'server',
       siteName: cfg.siteName,
       configured: !!cfg.apiBaseUrl && cfg.models.length > 0,
       models: cfg.models,
@@ -824,7 +830,7 @@ route(
   { admin: true },
 );
 
-route('GET', '/api/health', () => ({ ok: true, time: Date.now() }), { auth: false });
+route('GET', '/api/health', () => ({ ok: true, mode: 'server', time: Date.now() }), { auth: false });
 
 // ───────────────────────── 静态文件 ─────────────────────────
 
@@ -924,6 +930,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function bootstrap() {
+  await loadCore();
   // 上次进程退出时仍在运行的任务标记为已中断
   for (const t of store.tasks.filter((t) => t.status === 'running' || t.status === 'queued')) {
     t.status = 'stopped';

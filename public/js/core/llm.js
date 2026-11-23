@@ -1,5 +1,4 @@
-'use strict';
-// OpenAI 兼容的 Chat Completions 客户端（支持流式输出与工具调用）。
+// OpenAI 兼容的 Chat Completions 客户端（支持流式输出与工具调用，浏览器与 Node 通用）。
 // 兼容 OpenAI、DeepSeek、通义千问 DashScope 兼容模式、Moonshot、OpenRouter、各类中转等。
 
 function endpoint(baseUrl, suffix) {
@@ -33,7 +32,14 @@ async function readError(res) {
   } catch {
     /* 非 JSON */
   }
-  return new Error(`模型接口返回 ${res.status}${msg ? '：' + String(msg).slice(0, 600) : ''}`);
+  const detail = msg ? '：' + String(msg).slice(0, 600) : '';
+  let err;
+  if (res.status === 401) err = new Error(`API Key 无效或已被删除${detail}`);
+  else if (res.status === 402 || /key limit|credit|insufficient|余额|quota/i.test(String(msg))) {
+    err = new Error(`额度已用完，请联系发 Key 给你的人充值${detail}`);
+  } else err = new Error(`模型接口返回 ${res.status}${detail}`);
+  err.status = res.status;
+  return err;
 }
 
 function mergeToolCalls(target, deltas) {
@@ -68,9 +74,11 @@ function finalizeToolCalls(list) {
  * handlers.onDelta(text) / handlers.onReasoning(text) 在流式输出时回调。
  * 返回 { content, reasoning, toolCalls, finishReason, usage }
  */
-async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
+export async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
   const payload = { ...body };
   if (cfg.stream !== false) payload.stream = true;
+  // OpenRouter：在返回中附带本次花费
+  if (/openrouter\.ai/i.test(cfg.apiBaseUrl || '')) payload.usage = { include: true };
   if (cfg.temperature !== undefined && cfg.temperature !== null && cfg.temperature !== '') {
     payload.temperature = Number(cfg.temperature);
   }
@@ -135,8 +143,12 @@ async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
     if (choice.finish_reason) finishReason = choice.finish_reason;
   };
 
-  for await (const chunk of res.body) {
-    buf += decoder.decode(chunk, { stream: true });
+  // 用 reader 逐块读取（Safari 不支持对 ReadableStream 使用 for await）
+  const reader = res.body.getReader();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
     let idx;
     while ((idx = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, idx).trim();
@@ -150,7 +162,7 @@ async function chat(cfg, body, { signal, onDelta, onReasoning } = {}) {
   return { content, reasoning, toolCalls: finalizeToolCalls(toolCalls), finishReason, usage };
 }
 
-async function listModels(cfg, signal) {
+export async function listModels(cfg, signal) {
   const res = await fetch(endpoint(cfg.apiBaseUrl, '/models'), { headers: headers(cfg), signal });
   if (!res.ok) throw await readError(res);
   const j = await res.json();
@@ -158,4 +170,26 @@ async function listModels(cfg, signal) {
   return arr.map((m) => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean).sort();
 }
 
-module.exports = { chat, listModels };
+/**
+ * 查询当前 Key 的额度（OpenRouter 的 GET /key）。
+ * 返回 { label, limit, remaining, usage } ；接口不支持时返回 null。Key 无效时抛出错误。
+ */
+export async function getKeyInfo(cfg, signal) {
+  const res = await fetch(endpoint(cfg.apiBaseUrl, '/key'), { headers: headers(cfg), signal });
+  if (res.status === 401 || res.status === 403) throw await readError(res);
+  if (!res.ok) return null;
+  let j;
+  try {
+    j = await res.json();
+  } catch {
+    return null;
+  }
+  const d = j.data || j;
+  if (d.limit === undefined && d.usage === undefined) return null;
+  return {
+    label: d.label || '',
+    limit: d.limit ?? null,
+    remaining: d.limit_remaining ?? (d.limit != null ? d.limit - (d.usage || 0) : null),
+    usage: d.usage ?? 0,
+  };
+}

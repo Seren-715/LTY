@@ -1,5 +1,4 @@
-'use strict';
-// 行级 diff（与 public/js/diff.js 算法一致），后端只用来统计增删行数
+// 行级 diff（浏览器与 Node 通用）
 
 function splitLines(text) {
   if (text == null || text === '') return [];
@@ -8,7 +7,7 @@ function splitLines(text) {
   return lines;
 }
 
-function diffLines(a, b) {
+export function diffLines(a, b) {
   const A = splitLines(a);
   const B = splitLines(b);
   let start = 0;
@@ -57,7 +56,7 @@ function diffLines(a, b) {
   return ops;
 }
 
-function diffStats(before, after) {
+export function diffStats(before, after) {
   let added = 0;
   let removed = 0;
   for (const op of diffLines(before, after)) {
@@ -66,5 +65,3 @@ function diffStats(before, after) {
   }
   return { added, removed };
 }
-
-module.exports = { diffLines, diffStats };
