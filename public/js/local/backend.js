@@ -10,13 +10,16 @@ import { templateList, templateFiles } from '../core/templates.js';
 
 const SITE = window.RTY_CONFIG || {};
 const SESSION_KEY = 'rty:session';
-const modelCatalog = Array.isArray(SITE.modelCatalog) ? SITE.modelCatalog : [];
-const groupedModels = modelCatalog.length > 0;
-const tangguoUsage = SITE.usageProvider === 'tangguo';
+const defaultProvider = { ...SITE, id: 'default', label: SITE.providerLabel || '默认接口' };
+const additionalProviders = Array.isArray(SITE.additionalProviders) ? SITE.additionalProviders : [];
+const providers = [defaultProvider, ...additionalProviders.map((provider) => ({
+  modelCatalog: SITE.modelCatalog,
+  ...provider,
+}))];
 
 const projects = new Collection('projects');
 const tasks = new Collection('tasks');
-let session = null; // { accountId, key, nickname, createdAt, apiBaseUrl }
+let session = null; // { accountId, key, nickname, createdAt, providerId, apiBaseUrl }
 let modelCache = null;
 let modelRefresh = null;
 let usageLookup = null;
@@ -40,10 +43,18 @@ const onStorageError = (e) => {
 projects.onError = onStorageError;
 tasks.onError = onStorageError;
 
-function apiCfg() {
+function findProvider(id = 'default') {
+  return providers.find((provider) => provider.id === id);
+}
+
+function activeProvider() {
+  return findProvider(session?.providerId);
+}
+
+function apiCfg(provider = activeProvider(), apiKey = session?.key || '') {
   return {
-    apiBaseUrl: SITE.apiBaseUrl || '',
-    apiKey: session?.key || '',
+    apiBaseUrl: provider.apiBaseUrl || '',
+    apiKey,
     stream: SITE.stream !== false,
     temperature: SITE.temperature ?? '',
   };
@@ -79,7 +90,8 @@ async function activate(s) {
 
 export async function initLocal() {
   const s = readSession();
-  if (s?.key && s.accountId && s.apiBaseUrl === SITE.apiBaseUrl) await activate(s);
+  const provider = findProvider(s?.providerId);
+  if (s?.key && s.accountId && provider && s.apiBaseUrl === provider.apiBaseUrl) await activate(s);
   try {
     navigator.storage?.persist?.();
   } catch {
@@ -101,21 +113,22 @@ function publicUser() {
 
 const isValidAvatar = (v) => typeof v === 'string' && v.length <= 400000 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 
-async function discoverModels(cfg, signal) {
-  const available = await listModels(cfg, signal, { toolsOnly: !groupedModels });
-  if (!groupedModels) return available;
-  return modelCatalog
+async function discoverModels(provider, cfg, signal) {
+  const available = await listModels(cfg, signal, { toolsOnly: !provider.modelCatalog?.length });
+  if (!provider.modelCatalog?.length) return available;
+  return provider.modelCatalog
     .map(({ id, aliases = [] }) => [id, ...aliases].find((name) => available.includes(name)))
     .filter(Boolean);
 }
 
 async function models(refresh = false) {
-  if (!groupedModels && Array.isArray(SITE.models) && SITE.models.length) return SITE.models;
+  const provider = activeProvider();
+  if (!provider.modelCatalog?.length && Array.isArray(provider.models) && provider.models.length) return provider.models;
   if (!session) return [];
   if (!refresh && modelCache) return modelCache;
   if (!modelRefresh) {
     const activeSession = session;
-    const pending = discoverModels(apiCfg(), AbortSignal.timeout(15000))
+    const pending = discoverModels(provider, apiCfg(provider), AbortSignal.timeout(15000))
       .then((list) => {
         if (session !== activeSession) throw new HttpError(401, '登录状态已变更，请重试');
         modelCache = list;
@@ -134,14 +147,19 @@ async function models(refresh = false) {
 }
 
 async function config(refresh) {
+  const activeSession = session;
+  const provider = activeProvider();
   const ms = await models(refresh);
+  if (session !== activeSession) return config(false);
   return {
     mode: 'static',
     siteName: SITE.siteName || 'RTY Code',
-    configured: !!SITE.apiBaseUrl && ms.length > 0,
-    groupedModels,
+    configured: !!provider.apiBaseUrl && ms.length > 0,
+    groupedModels: !!provider.modelCatalog?.length,
     models: ms,
-    defaultModel: SITE.defaultModel && ms.includes(SITE.defaultModel) ? SITE.defaultModel : ms[0] || '',
+    defaultModel: ms.includes(provider.defaultModel) ? provider.defaultModel : ms[0] || '',
+    providers: providers.map(({ id, label }) => ({ id, label })),
+    providerId: provider.id,
     allowRegister: false,
     hasUsers: true,
     loginHint: SITE.loginHint || '',
@@ -230,7 +248,8 @@ function broadcast(taskId, ev) {
 }
 
 function startRun(task) {
-  if (!SITE.apiBaseUrl) throw new HttpError(400, '站点尚未配置 API 地址（config.js）');
+  const provider = activeProvider();
+  if (!provider.apiBaseUrl) throw new HttpError(400, '站点尚未配置 API 地址（config.js）');
   if (!task.model) throw new HttpError(400, '没有可用的模型，请检查 config.js 中的 models');
   const project = projects.get(task.projectId);
   if (!project) throw new HttpError(400, '任务所属项目已被删除');
@@ -264,8 +283,8 @@ function startRun(task) {
   };
 
   const cfg = {
-    ...apiCfg(),
-    protocol: modelCatalog.find(({ id, aliases }) => id === task.model || aliases?.includes(task.model))?.protocol,
+    ...apiCfg(provider),
+    protocol: provider.modelCatalog?.find(({ id, aliases }) => id === task.model || aliases?.includes(task.model))?.protocol,
     siteName: SITE.siteName || 'RTY Code',
     systemPrompt: SITE.systemPrompt || '',
     maxSteps: SITE.maxSteps || 30,
@@ -298,13 +317,15 @@ function startRun(task) {
 
 async function modelForRun(requested, previous) {
   const activeSession = session;
+  const provider = activeProvider();
+  const groupedModels = !!provider.modelCatalog?.length;
   const list = await models(groupedModels);
   if (session !== activeSession) throw new HttpError(401, '登录状态已变更，请重试');
-  const selected = [requested, previous, SITE.defaultModel].find((id) => list.includes(id)) || list[0];
+  const selected = [requested, previous, provider.defaultModel].find((id) => list.includes(id)) || list[0];
   if (selected) return selected;
   if (!groupedModels && (requested || previous)) return requested || previous;
   throw new HttpError(400, groupedModels
-    ? '当前 API Key 分组没有受支持的模型。请在 API 平台切换分组后刷新模型。'
+    ? '当前 API Key 没有受支持的模型。请检查平台的模型授权后刷新。'
     : '没有可用的模型，请检查 config.js 中的 models');
 }
 
@@ -327,25 +348,27 @@ route(
     const key = String(body.key || '').trim();
     const nickname = String(body.nickname || '').trim().slice(0, 32);
     if (!key) throw new HttpError(400, '请输入 API Key');
-    if (!SITE.apiBaseUrl) throw new HttpError(400, '站点尚未配置 API 地址（config.js）');
-    const cfg = { apiBaseUrl: SITE.apiBaseUrl, apiKey: key };
+    const provider = findProvider(body.providerId);
+    if (!provider?.apiBaseUrl) throw new HttpError(400, '请选择已配置的 API 平台');
+    const cfg = apiCfg(provider, key);
     const signal = AbortSignal.timeout(15000);
     let info;
     let discoveredModels = null;
     try {
-      if (!groupedModels && !tangguoUsage) info = await getKeyInfo(cfg, signal);
-      if (!info) discoveredModels = await discoverModels(cfg, signal);
+      if (!provider.modelCatalog?.length && !provider.usageProvider) info = await getKeyInfo(cfg, signal);
+      if (!info) discoveredModels = await discoverModels(provider, cfg, signal);
     } catch (e) {
       if (e.status === 401 || e.status === 403) throw new HttpError(401, 'API Key 无效，请检查是否复制完整');
       if (e instanceof TypeError) throw new HttpError(502, '浏览器无法连接模型接口。请检查网络，以及 API 提供方是否允许当前站点跨域访问（CORS）。');
       throw new HttpError(502, `验证 Key 失败：${e.message}`);
     }
-    const accountId = (await sha256Hex(key)).slice(0, 16);
+    const identity = provider.id === 'default' ? key : `${provider.id}:${key}`;
+    const accountId = (await sha256Hex(identity)).slice(0, 16);
     let acct = await idb.get('accounts', accountId).catch(() => null);
     if (!acct) acct = { id: accountId, nickname: nickname || info?.label || '同学', createdAt: Date.now() };
     else if (nickname) acct.nickname = nickname;
     await idb.put('accounts', acct);
-    const s = { accountId, key, nickname: acct.nickname, createdAt: acct.createdAt, apiBaseUrl: cfg.apiBaseUrl };
+    const s = { accountId, key, nickname: acct.nickname, createdAt: acct.createdAt, providerId: provider.id, apiBaseUrl: cfg.apiBaseUrl };
     localStorage.setItem(SESSION_KEY, JSON.stringify(s));
     modelCache = discoveredModels;
     modelRefresh = null;
@@ -414,7 +437,11 @@ function personalUsage(refresh) {
 }
 
 route('GET', '/api/balance', async ({ query }) => {
-  if (!tangguoUsage && groupedModels) return { unsupported: true };
+  const provider = activeProvider();
+  const tangguoUsage = provider.usageProvider === 'tangguo';
+  if (!tangguoUsage && (provider.modelCatalog?.length || provider.usageProvider === 'none')) {
+    return { unsupported: true, source: provider.id };
+  }
   try {
     if (tangguoUsage) return await personalUsage(query.refresh === '1');
     const info = await getKeyInfo(apiCfg(), AbortSignal.timeout(15000));

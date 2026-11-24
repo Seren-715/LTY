@@ -63,7 +63,7 @@ export async function homeView(container) {
     const cfg = state.config;
     notice.classList.toggle('hidden', cfg.configured);
     $(notice, 'span').innerHTML = cfg.groupedModels
-      ? '当前 API Key 没有可用模型。请检查分组，然后在输入框右下角的模型菜单中刷新。'
+      ? '当前 API Key 没有可用模型。请检查平台的模型授权，然后在模型菜单中刷新。'
       : `尚未配置模型 API。${cfg.user?.role === 'admin' ? '请前往 <a href="#/admin">站点管理</a> 填写。' : '请联系管理员完成配置。'}`;
   };
   syncNotice();
@@ -90,7 +90,7 @@ export async function homeView(container) {
     },
     onModelsRefreshed: syncNotice,
     async onSubmit({ prompt, attachments, model }) {
-      if (!state.config.configured) throw new Error(state.config.groupedModels ? '当前 API Key 没有可用模型，请检查分组后刷新。' : '尚未配置模型 API');
+      if (!state.config.configured) throw new Error(state.config.groupedModels ? '当前 API Key 没有可用模型，请检查平台的模型授权后刷新。' : '尚未配置模型 API');
       if (!projectId) {
         const p = await api.post('/api/projects', { name: '我的项目', template: 'blank' });
         projectId = p.id;

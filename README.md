@@ -12,7 +12,7 @@
 | 智能体 | 在服务器后台运行 | 在浏览器里运行，关掉页面任务停止 |
 | 数据 | 保存在服务器 `data/` 目录 | 保存在各自浏览器（IndexedDB），可导出 / 导入备份 |
 
-`public/config.js` 默认使用 `mode: 'static'`。站点只需要静态文件托管，模型请求由浏览器直接发给唐果。
+`public/config.js` 默认使用 `mode: 'static'`。浏览器会按登录时选择的平台调用 API，也可以使用该平台配置的同源转发地址。
 
 ## 功能
 
@@ -30,11 +30,11 @@
 | 项目 | 新建项目（空白 / 网页 / Node.js / Python 模板），在线编辑器（语法高亮、Ctrl+S 保存），上传文件（支持拖拽），下载 ZIP，项目自定义指令 / `AGENTS.md` |
 | 管理（服务器模式） | 在网页中配置 API 地址、Key、模型列表、测试连接；开关注册；用户管理 |
 
-## 纯静态部署与唐果 Key 登录
+## 纯静态部署与 API Key 登录
 
 1. 把 `public/` 目录的全部内容部署到静态托管平台。
-2. 在 [唐果中转站](https://api.tangguo.xin/) 创建 API Key，在站点登录页输入该 Key。API 地址已配置为 `https://api.tangguo.xin/v1`。
-3. 登录会调用 `/v1/models` 验证 Key，并且只显示当前分组授权的下列型号。
+2. 在登录页选择「唐果」或「AiHubMix」，输入对应平台的 API Key。唐果使用 `apiBaseUrl`，可继续指向现有站点代理。AiHubMix 默认直连 `https://aihubmix.com/v1`，可独立在 `additionalProviders` 中配置。
+3. 登录会调用所选平台的 `/v1/models` 验证 Key，并且只显示当前 Key 授权的下列型号。
 
 | 模型 | 接口 |
 | --- | --- |
@@ -47,13 +47,15 @@
 
 使用 Qoder Sites 同源代理时，在 `public/config.js` 保留 `usageProvider: 'tangguo'` 和已部署的 `apiBaseUrl`。云函数需将对应的 `GET /v1/usage` 路由转发给唐果，透传当前请求的 `Authorization`，并禁用该响应的共享缓存（`Cache-Control: private, no-store`）。用量按当前 Key 由唐果汇总，也包括该 Key 在其他客户端的消费。消费上限由唐果管理。
 
+AiHubMix 的模型调用已验证可以用 `gpt-6.2-sol` 直连。若改用同源代理，请单独设置 AiHubMix 的地址。AiHubMix 账号设置页提供平台用量明细入口；站内个人消费需要平台提供可核实的单 Key 费用。
+
 本地预览：
 
 ```bash
 python -m http.server 8080 --directory public   # 打开 http://localhost:8080
 ```
 
-项目和任务按 Key 保存在当前浏览器中。更换 Key 或部署域名时，可先从旧站的「账号设置」导出备份，再登录新站导入。
+项目和任务按平台及 Key 保存在当前浏览器中。更换平台、Key 或部署域名时，可在原账号的「账号设置」导出备份，再登录新账号导入。
 
 ## 可选服务器模式（任意 Node.js 托管）
 

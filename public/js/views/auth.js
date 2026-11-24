@@ -72,18 +72,22 @@ export async function authView(container) {
 
 // 纯静态模式：用 API Key 登录
 function keyLoginView(container, cfg) {
+  const providers = cfg.providers || [];
   container.innerHTML = `<div class="auth-page"><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>
     <form novalidate>
+      ${providers.length > 1 ? `<div class="field"><label for="provider">API 平台</label><select id="provider" class="select" name="providerId">
+        ${providers.map(({ id, label }) => `<option value="${esc(id)}" ${id === cfg.providerId ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+      </select></div>` : ''}
       <div class="field"><label for="k">API Key</label><input id="k" class="input mono" name="key" type="password" autocomplete="off" placeholder="sk-..." required>
         <span class="hint">${esc(cfg.loginHint || '请输入分配给你的 API Key。')}</span></div>
       <div class="field"><label for="n">昵称（可选）</label><input id="n" class="input" name="nickname" maxlength="32" placeholder="怎么称呼你"></div>
       <div class="form-error"></div>
       <button class="btn primary block" type="submit">登录</button>
     </form>
-    <div class="banner info" style="margin:16px 0 0;align-items:flex-start">${icon('shield')}<span>Key 只保存在你自己的浏览器里，不会上传到本站。你的项目和任务也保存在本浏览器中，换设备前请在「账号设置」中导出备份。</span></div>
+    <div class="banner info" style="margin:16px 0 0;align-items:flex-start">${icon('shield')}<span>Key 保存在本浏览器中，调用时会发给所选平台或其代理。项目和任务也保存在本浏览器中，可在「账号设置」中导出备份。</span></div>
   </div></div>`;
   const form = $(container, 'form');
   const errEl = $(container, '.form-error');
@@ -97,7 +101,11 @@ function keyLoginView(container, cfg) {
     submit.disabled = true;
     submit.textContent = '正在验证…';
     try {
-      const r = await api.post('/api/auth/login', { key, nickname: form.nickname.value.trim() });
+      const r = await api.post('/api/auth/login', {
+        key,
+        providerId: form.elements.namedItem('providerId')?.value || cfg.providerId,
+        nickname: form.nickname.value.trim(),
+      });
       state.user = r.user;
       await loadConfig();
       toast(`欢迎，${r.user.username}！`, 'success');

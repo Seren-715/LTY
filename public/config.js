@@ -15,8 +15,13 @@ window.RTY_CONFIG = {
   // 以下模型设置仅用于静态模式。服务器模式使用 .env 或「站点管理」。
   // 使用静态模式时，接口必须允许浏览器跨域访问。
   apiBaseUrl: 'https://api.tangguo.xin/v1',
+  providerLabel: '唐果',
   // 通过同一接口地址查询当前 Key 的消费。
   usageProvider: 'tangguo',
+  // 备用平台独立验证 Key，并通过自己的地址查询可用模型。
+  additionalProviders: [
+    { id: 'aihubmix', label: 'AiHubMix', apiBaseUrl: 'https://aihubmix.com/v1', usageProvider: 'none' },
+  ],
 
   // 只显示当前 Key 分组可用的型号。优先使用官方 ID，再匹配中转站别名。
   modelCatalog: [

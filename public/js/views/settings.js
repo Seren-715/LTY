@@ -123,6 +123,12 @@ async function staticSettings(container) {
       const b = await api.get(force ? '/api/balance?refresh=1' : '/api/balance');
       if (!isCurrent()) return;
       if (force) window.dispatchEvent(new Event('rty:usage-refresh'));
+      if (b.unsupported && b.source === 'aihubmix') {
+        balanceTitle.textContent = '当前 API Key 消费';
+        balanceNote.textContent = '站内暂未接入 AiHubMix 的单 Key 计费数据。';
+        box.innerHTML = '<a href="https://console.aihubmix.com/" target="_blank" rel="noopener noreferrer">前往 AiHubMix 控制台查看用量</a>';
+        return;
+      }
       if (b.source === 'tangguo') {
         balanceTitle.textContent = '当前 API Key 消费';
         balanceNote.textContent = '由 API 平台统计的实际消费。未返回的金额显示为「—」。';
