@@ -304,7 +304,7 @@ async function modelForRun(requested, previous) {
   if (selected) return selected;
   if (!groupedModels && (requested || previous)) return requested || previous;
   throw new HttpError(400, groupedModels
-    ? '当前 API Key 分组没有受支持的模型。请在唐果切换分组后刷新模型。'
+    ? '当前 API Key 分组没有受支持的模型。请在 API 平台切换分组后刷新模型。'
     : '没有可用的模型，请检查 config.js 中的 models');
 }
 
@@ -422,7 +422,7 @@ route('GET', '/api/balance', async ({ query }) => {
   } catch (e) {
     if (tangguoUsage) {
       const detail = e instanceof TypeError ? '请检查网络或站点代理是否转发 /v1/usage' : e.message;
-      throw new HttpError(502, `唐果用量查询失败：${detail}`);
+      throw new HttpError(502, `用量查询失败：${detail}`);
     }
     throw new HttpError(e.status === 401 ? 401 : 502, e.message);
   }

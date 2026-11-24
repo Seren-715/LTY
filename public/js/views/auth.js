@@ -9,7 +9,7 @@ export async function authView(container) {
   if (getMode() === 'static') return keyLoginView(container, cfg);
   let mode = cfg.hasUsers ? 'login' : 'register';
 
-  container.innerHTML = `<div class="auth-page"><div class="auth-card">
+  container.innerHTML = `<div class="auth-page"><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>
@@ -72,7 +72,7 @@ export async function authView(container) {
 
 // 纯静态模式：用 API Key 登录
 function keyLoginView(container, cfg) {
-  container.innerHTML = `<div class="auth-page"><div class="auth-card">
+  container.innerHTML = `<div class="auth-page"><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>

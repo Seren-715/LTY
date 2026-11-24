@@ -125,9 +125,9 @@ async function staticSettings(container) {
       if (force) window.dispatchEvent(new Event('rty:usage-refresh'));
       if (b.source === 'tangguo') {
         balanceTitle.textContent = '当前 API Key 消费';
-        balanceNote.textContent = '唐果统计的实际消费。未返回的金额显示为「—」。';
+        balanceNote.textContent = '由 API 平台统计的实际消费。未返回的金额显示为「—」。';
         box.innerHTML = b.unsupported
-          ? '<span class="muted">唐果未提供当前 Key 的消费数据。</span>'
+          ? '<span class="muted">API 平台未提供当前 Key 的消费数据。</span>'
           : renderKeySpending(b);
         return;
       }

@@ -64,7 +64,8 @@ const PATHS = {
     external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
 };
 
-export const icon = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ''}</svg>`;
+export const icon = (name, cls = '') =>
+  name === 'logo' ? `<img class="logo-img ${cls}" src="img/logo.png" alt="" draggable="false">` : `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ''}</svg>`;
 
 // —— 提示 ——
 let toastBox;

@@ -183,7 +183,7 @@ export async function listModels(cfg, signal, { toolsOnly = false } = {}) {
     .sort();
 }
 
-/** 唐果用量，只向调用方返回当前 Key 的实扣统计。 */
+/** API 平台用量，只向调用方返回当前 Key 的实扣统计。 */
 export async function getTangguoUsage(cfg, signal) {
   const res = await fetch(endpoint(cfg.apiBaseUrl, '/usage'), {
     headers: { Authorization: `Bearer ${cfg.apiKey}`, Accept: 'application/json' },
@@ -195,7 +195,7 @@ export async function getTangguoUsage(cfg, signal) {
   if (!res.headers.get('content-type')?.includes('json')) return null;
   const data = await res.json();
   if (!['unrestricted', 'quota_limited'].includes(data?.mode)) return null;
-  if (data.isValid === false) throw new Error('唐果未授权查询当前 Key 的用量');
+  if (data.isValid === false) throw new Error('API 平台未授权查询当前 Key 的用量');
 
   const actualCost = (entry) => Number.isFinite(entry?.actual_cost) ? entry.actual_cost : null;
   const summary = (entry) => {

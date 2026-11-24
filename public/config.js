@@ -15,7 +15,7 @@ window.RTY_CONFIG = {
   // 以下模型设置仅用于静态模式。服务器模式使用 .env 或「站点管理」。
   // 使用静态模式时，接口必须允许浏览器跨域访问。
   apiBaseUrl: 'https://api.tangguo.xin/v1',
-  // 通过同一接口地址查询当前唐果 Key 的消费。
+  // 通过同一接口地址查询当前 Key 的消费。
   usageProvider: 'tangguo',
 
   // 只显示当前 Key 分组可用的型号。优先使用官方 ID，再匹配中转站别名。
@@ -36,5 +36,5 @@ window.RTY_CONFIG = {
   systemPrompt: '',
 
   // 登录页的说明文字
-  loginHint: '请输入你的唐果 API Key。',
+  loginHint: '请输入你的 API Key。',
 };

@@ -134,7 +134,7 @@ export function createSidebar({ onLogout }) {
     timer = setTimeout(refresh, tasks.some((t) => t.status === 'running' || t.status === 'queued') ? 2500 : 20000);
   }
 
-  // 唐果静态账号显示当前 Key 的消费，其他接口保留原额度格式。
+  // 静态账号显示当前 Key 的消费，其他接口保留原额度格式。
   let balanceAt = 0;
   let balanceOwner = null;
   let balanceRun = 0;

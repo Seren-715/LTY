@@ -64,6 +64,7 @@ export async function taskView(container, id) {
           <div class="menu-pop hidden right more-pop"></div>
         </div>
       </header>
+      <div class="chat-bg" aria-hidden="true"></div>
       <div class="messages"><div class="thread"></div></div>
       <div class="dock"><div class="dock-inner"></div></div>
     </section>
@@ -112,6 +113,10 @@ export async function taskView(container, id) {
     onStop: () => api.post(`/api/tasks/${id}/stop`).catch((err) => toast(err.message, 'error')),
   });
   $(container, '.dock-inner').appendChild(composer.el);
+  // 背景插画始终贴在输入框上方
+  const dockEl = $(container, '.dock');
+  const dockRO = new ResizeObserver(() => $(container, '.chat-col').style.setProperty('--dock-h', dockEl.offsetHeight + 'px'));
+  dockRO.observe(dockEl);
 
   async function loadProject() {
     try {
@@ -512,6 +517,7 @@ export async function taskView(container, id) {
 
   return () => {
     destroyed = true;
+    dockRO.disconnect();
     if (abort) abort.abort();
     clearTimeout(panelTimer);
     if (panelInst?.destroy) panelInst.destroy();
