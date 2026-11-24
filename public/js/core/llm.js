@@ -183,6 +183,41 @@ export async function listModels(cfg, signal, { toolsOnly = false } = {}) {
     .sort();
 }
 
+/** 唐果用量，只向调用方返回当前 Key 的实扣统计。 */
+export async function getTangguoUsage(cfg, signal) {
+  const res = await fetch(endpoint(cfg.apiBaseUrl, '/usage'), {
+    headers: { Authorization: `Bearer ${cfg.apiKey}`, Accept: 'application/json' },
+    signal,
+    cache: 'no-store',
+  });
+  if (res.status === 404 || res.status === 405) return null;
+  if (!res.ok) throw await readError(res);
+  if (!res.headers.get('content-type')?.includes('json')) return null;
+  const data = await res.json();
+  if (!['unrestricted', 'quota_limited'].includes(data?.mode)) return null;
+  if (data.isValid === false) throw new Error('唐果未授权查询当前 Key 的用量');
+
+  const actualCost = (entry) => Number.isFinite(entry?.actual_cost) ? entry.actual_cost : null;
+  const summary = (entry) => {
+    const cost = actualCost(entry);
+    return cost === null ? null : { cost };
+  };
+  const breakdown = (entries, label) => (Array.isArray(entries) ? entries : [])
+    .filter((entry) => typeof entry?.[label] === 'string' && entry[label] && actualCost(entry) !== null)
+    .map((entry) => ({ [label]: entry[label], cost: actualCost(entry) }));
+  const currency = [data.unit, data.quota?.unit].find((unit) => typeof unit === 'string' && /^[A-Z]{3}$/.test(unit));
+
+  return {
+    source: 'tangguo',
+    currency: currency || 'USD',
+    today: summary(data.usage?.today),
+    total: summary(data.usage?.total),
+    daily: breakdown(data.daily_usage, 'date'),
+    models: breakdown(data.model_stats, 'model'),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 /**
  * 查询当前 Key 的额度（OpenRouter 的 GET /key）。
  * 返回 { label, limit, remaining, usage } ；接口不支持时返回 null。Key 无效时抛出错误。

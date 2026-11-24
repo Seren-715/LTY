@@ -4,6 +4,7 @@ import { esc, $, icon, toast, formatDate, confirmDialog, promptDialog } from '..
 import { downloadBlob } from '../zip.js';
 import { state, navigate } from '../state.js';
 import { avatarSrc, chooseAvatar } from '../avatar.js';
+import { formatUsageCost } from '../sidebar.js';
 
 export async function settingsView(container) {
   if (getMode() === 'static') return staticSettings(container);
@@ -53,7 +54,26 @@ export async function settingsView(container) {
   };
 }
 
-// —— 纯静态模式：余额、昵称、数据备份 ——
+function renderKeySpending(balance) {
+  const amount = (value) => esc(formatUsageCost(value, balance.currency));
+  const details = (title, label, rows, field) => !rows.length ? '' : `<section class="usage-detail">
+    <h3>${title}</h3>
+    <table class="table usage-table">
+      <thead><tr><th scope="col">${label}</th><th scope="col">实际消费</th></tr></thead>
+      <tbody>${rows.map((row) => `<tr><td>${esc(row[field])}</td><td>${amount(row.cost)}</td></tr>`).join('')}</tbody>
+    </table>
+  </section>`;
+  const updatedAt = balance.updatedAt ? Date.parse(balance.updatedAt) : NaN;
+  return `<div class="usage-summary">
+    <div><div class="muted">今日消费</div><strong>${amount(balance.today?.cost)}</strong></div>
+    <div><div class="muted">累计消费</div><strong>${amount(balance.total?.cost)}</strong></div>
+  </div>
+  ${details('按日消费', '日期', balance.daily || [], 'date')}
+  ${details('按模型消费', '模型', balance.models || [], 'model')}
+  ${Number.isFinite(updatedAt) ? `<p class="usage-updated muted">查询于 ${esc(formatDate(updatedAt))}</p>` : ''}`;
+}
+
+// —— 纯静态模式：消费、昵称、数据备份 ——
 async function staticSettings(container) {
   const { user } = await api.get('/api/auth/me');
   const { masked } = await api.get('/api/session/key');
@@ -72,9 +92,9 @@ async function staticSettings(container) {
       </div>
     </div>
     <div class="card">
-      <h2>${icon('key')} 额度</h2>
-      <p class="sub">由 API 平台统计，可能有几分钟延迟。额度不足时请联系发 Key 给你的人充值。</p>
-      <div class="balance-box"><span class="muted"><span class="spin"></span> 正在查询…</span></div>
+      <h2>${icon('key')} <span class="balance-title">API Key 用量</span></h2>
+      <p class="sub balance-note">由 API 平台统计，可能有几分钟延迟。</p>
+      <div class="balance-box" aria-live="polite"><span class="muted"><span class="spin"></span> 正在查询…</span></div>
       <div class="actions" style="margin-top:12px"><button class="btn sm" data-act="refresh">${icon('refresh')}刷新</button></div>
     </div>
     <div class="card">
@@ -92,10 +112,26 @@ async function staticSettings(container) {
 
   bindAvatar(container, user);
   const box = $(container, '.balance-box');
-  const loadBalance = async () => {
+  const balanceTitle = $(container, '.balance-title');
+  const balanceNote = $(container, '.balance-note');
+  const refresh = $(container, '[data-act="refresh"]');
+  const isCurrent = () => box.isConnected && state.user?.id === user.id;
+  const loadBalance = async (force = false) => {
+    refresh.disabled = true;
     box.innerHTML = '<span class="muted"><span class="spin"></span> 正在查询…</span>';
     try {
-      const b = await api.get('/api/balance');
+      const b = await api.get(force ? '/api/balance?refresh=1' : '/api/balance');
+      if (!isCurrent()) return;
+      if (force) window.dispatchEvent(new Event('rty:usage-refresh'));
+      if (b.source === 'tangguo') {
+        balanceTitle.textContent = '当前 API Key 消费';
+        balanceNote.textContent = '唐果统计的实际消费。未返回的金额显示为「—」。';
+        box.innerHTML = b.unsupported
+          ? '<span class="muted">唐果未提供当前 Key 的消费数据。</span>'
+          : renderKeySpending(b);
+        return;
+      }
+      balanceTitle.textContent = '额度';
       if (b.unsupported) {
         box.innerHTML = '<span class="muted">当前 API 平台不支持查询额度，请到平台官网查看。</span>';
         return;
@@ -106,14 +142,16 @@ async function staticSettings(container) {
         <div><div class="muted" style="font-size:12.5px">已使用 / 上限</div><div style="font-size:24px;font-weight:650">${money(b.usage)} <span class="muted" style="font-size:15px;font-weight:500">/ ${b.limit != null ? money(b.limit) : '∞'}</span></div></div>
       </div>${pct != null ? `<div class="meter"><span style="width:${pct}%"></span></div>` : ''}`;
     } catch (e) {
-      box.innerHTML = `<div class="error-box" style="margin:0">${esc(e.message)}</div>`;
+      if (isCurrent()) box.innerHTML = `<div class="error-box" style="margin:0">${esc(e.message)}</div>`;
+    } finally {
+      refresh.disabled = false;
     }
   };
   loadBalance();
 
   container.addEventListener('click', async (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'refresh') loadBalance();
+    if (act === 'refresh') loadBalance(true);
     else if (act === 'logout') {
       if (!(await confirmDialog('退出后需要重新输入 API Key 才能登录。本地数据会保留。', { okText: '退出' }))) return;
       await api.post('/api/auth/logout');

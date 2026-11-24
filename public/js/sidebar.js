@@ -7,6 +7,16 @@ import { avatarSrc } from './avatar.js';
 
 const TASKS_PER_PROJECT = 8;
 
+export function formatUsageCost(value, currency) {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const code = currency || 'USD';
+  const digits = { minimumFractionDigits: 2, maximumFractionDigits: 8 };
+  if (/^[a-z]{3}$/i.test(code)) {
+    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: code, currencyDisplay: 'narrowSymbol', ...digits }).format(value);
+  }
+  return `${new Intl.NumberFormat('zh-CN', digits).format(value)} ${code}`;
+}
+
 export function createSidebar({ onLogout }) {
   let tasks = [];
   let query = '';
@@ -124,20 +134,42 @@ export function createSidebar({ onLogout }) {
     timer = setTimeout(refresh, tasks.some((t) => t.status === 'running' || t.status === 'queued') ? 2500 : 20000);
   }
 
-  // 余额（静态模式下读取 Key 剩余额度）
+  // 唐果静态账号显示当前 Key 的消费，其他接口保留原额度格式。
   let balanceAt = 0;
-  async function refreshBalance(force = false) {
+  let balanceOwner = null;
+  let balanceRun = 0;
+  async function refreshBalance(force = false, refreshUsage = false) {
     const box = $(root, '.sb-balance');
     if (getMode() !== 'static') return (box.textContent = state.user?.role === 'admin' ? '管理员' : '');
+    const owner = state.user?.id;
+    if (owner !== balanceOwner) {
+      balanceOwner = owner;
+      balanceAt = 0;
+      box.textContent = '';
+      box.classList.remove('low');
+    }
+    if (owner == null) return;
     if (!force && Date.now() - balanceAt < 30000) return;
     balanceAt = Date.now();
+    const run = ++balanceRun;
+    const isCurrent = () => root.isConnected && run === balanceRun && state.user?.id === owner;
     try {
-      const b = await api.get('/api/balance');
+      const b = await api.get(refreshUsage ? '/api/balance?refresh=1' : '/api/balance');
+      if (!isCurrent()) return;
+      box.classList.remove('low');
+      if (b.source === 'tangguo') {
+        const cost = b.today?.cost;
+        box.textContent = Number.isFinite(cost) ? `今日消费 ${formatUsageCost(cost, b.currency)}` : '';
+        return;
+      }
       if (b.unsupported) return (box.textContent = '');
       box.textContent = b.remaining != null ? `余额 $${Number(b.remaining).toFixed(2)}` : `已用 $${Number(b.usage || 0).toFixed(2)}`;
       box.classList.toggle('low', b.remaining != null && b.remaining < 0.2);
     } catch {
-      box.textContent = '';
+      if (isCurrent()) {
+        box.textContent = '';
+        box.classList.remove('low');
+      }
     }
   }
 
@@ -226,11 +258,15 @@ export function createSidebar({ onLogout }) {
   if (prefs.get('sbHidden', false)) document.body.classList.add('sb-collapsed');
   $(root, '.sb-hide').onclick = toggle;
 
-  window.addEventListener('rty:refresh-sidebar', () => refresh());
-  window.addEventListener('rty:task-end', () => {
+  const onRefreshSidebar = () => refresh();
+  const onTaskEnd = () => {
     refresh();
-    refreshBalance(true);
-  });
+    refreshBalance(true, true);
+  };
+  const onUsageRefresh = () => refreshBalance(true);
+  window.addEventListener('rty:refresh-sidebar', onRefreshSidebar);
+  window.addEventListener('rty:task-end', onTaskEnd);
+  window.addEventListener('rty:usage-refresh', onUsageRefresh);
 
   return {
     el: root,
@@ -242,7 +278,13 @@ export function createSidebar({ onLogout }) {
       active = { ...active, ...a };
       render();
     },
-    stop: () => clearTimeout(timer),
+    stop() {
+      clearTimeout(timer);
+      balanceRun++;
+      window.removeEventListener('rty:refresh-sidebar', onRefreshSidebar);
+      window.removeEventListener('rty:task-end', onTaskEnd);
+      window.removeEventListener('rty:usage-refresh', onUsageRefresh);
+    },
   };
 }
 
