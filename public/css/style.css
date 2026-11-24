@@ -249,6 +249,8 @@ body.sb-collapsed .sidebar { margin-left: -264px; }
 .sb-proj.current > .sb-proj-row { font-weight: 600; }
 .sb-row-actions { display: none; gap: 1px; }
 .sb-proj-row:hover .sb-row-actions { display: inline-flex; }
+.sb-row-actions .sb-del:hover { color: var(--red); background: var(--red-soft); }
+@media (hover: none) { .sb-row-actions { display: inline-flex; } }
 .sb-tasks { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 6px; }
 .sb-task {
   display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 36px; border-radius: 9px;
@@ -509,6 +511,10 @@ a.card:hover { text-decoration: none; border-color: #bcd3f1; box-shadow: var(--s
 .card h3 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
 .card .desc { color: var(--text-2); font-size: 13px; min-height: 20px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .meta { margin-top: 12px; display: flex; gap: 12px; color: var(--text-3); font-size: 12.5px; }
+.card-del { margin: -4px -6px -4px 0; opacity: 0; transition: opacity .12s; color: var(--text-3); }
+a.card:hover .card-del, .card-del:focus-visible { opacity: 1; }
+.card-del:hover { color: var(--red); background: var(--red-soft); }
+@media (hover: none) { .card-del { opacity: 1; } }
 .proj-icon { width: 30px; height: 30px; border-radius: 9px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; flex: none; }
 .template-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .template-opt { border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 12px; cursor: pointer; font-size: 13px; background: var(--surface); text-align: left; }

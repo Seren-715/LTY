@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { esc, el, $, icon, toast, modal, confirmDialog, promptDialog } from '../ui.js';
 import { state, loadProjects, prefs, navigate } from '../state.js';
 import { renderTree, mountPreviewPanel } from '../components.js';
+import { deleteProject } from './projects.js';
 import { highlight, langFromPath } from '../highlight.js';
 import { htmlEntries } from '../preview.js';
 import { downloadZip, downloadFile } from '../zip.js';
@@ -256,11 +257,8 @@ export async function projectView(container, id) {
     });
     $(b, '[data-del]').onclick = async () => {
       m.close();
-      if (!(await confirmDialog(`确定删除项目「${project.name}」？此操作不可恢复。`, { danger: true, okText: '删除' }))) return;
-      await api.del(`/api/projects/${id}`);
-      await loadProjects();
-      if (prefs.get('projectId') === id) prefs.set('projectId', null);
-      toast('项目已删除');
+      const p = state.projects.find((x) => x.id === id) || { id, name: project.name, fileCount: Object.keys(project.files || {}).length };
+      if (!(await deleteProject(p))) return;
       navigate('#/projects');
     };
   }

@@ -1,7 +1,23 @@
 // 项目列表 + 新建项目弹窗
 import { api } from '../api.js';
-import { esc, el, $, icon, modal, timeAgo } from '../ui.js';
-import { state, loadProjects, navigate } from '../state.js';
+import { esc, el, $, icon, modal, timeAgo, confirmDialog, toast } from '../ui.js';
+import { state, loadProjects, navigate, prefs } from '../state.js';
+
+/** 删除项目（确认后执行）。返回是否已删除 */
+export async function deleteProject(p) {
+  const parts = [p.fileCount != null ? `${p.fileCount} 个文件` : '所有文件', p.taskCount ? `${p.taskCount} 个任务` : ''].filter(Boolean);
+  const ok = await confirmDialog(
+    `确定删除项目「${p.name}」？其中的 ${parts.join('和 ')}都会被删除，此操作不可恢复。`,
+    { title: '删除项目', danger: true, okText: '删除' },
+  );
+  if (!ok) return false;
+  await api.del(`/api/projects/${p.id}`);
+  if (prefs.get('projectId') === p.id) prefs.set('projectId', null);
+  await loadProjects();
+  window.dispatchEvent(new Event('rty:refresh-sidebar'));
+  toast(`项目「${p.name}」已删除`, 'success');
+  return true;
+}
 
 export function newProjectDialog() {
   return new Promise((resolve) => {
@@ -67,7 +83,7 @@ export async function projectsView(container) {
     grid.innerHTML = state.projects
       .map(
         (p) => `<a class="card" href="#/projects/${p.id}">
-          <h3><span class="proj-icon">${icon('folder')}</span><span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span></h3>
+          <h3><span class="proj-icon">${icon('folder')}</span><span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span><button class="icon-btn sm card-del" data-del-proj="${p.id}" title="删除项目">${icon('trash')}</button></h3>
           <div class="desc">${esc(p.description || '暂无简介')}</div>
           <div class="meta"><span>${p.fileCount} 个文件</span><span>${p.taskCount} 个任务</span><span class="spacer"></span><span>${timeAgo(p.updatedAt)}</span></div>
         </a>`,
@@ -77,6 +93,17 @@ export async function projectsView(container) {
   await loadProjects();
   render();
   container.addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-del-proj]');
+    if (del) {
+      e.preventDefault();
+      e.stopPropagation();
+      const p = state.projects.find((x) => x.id === del.dataset.delProj);
+      if (p && (await deleteProject(p))) {
+        if (!state.projects.length) return projectsView(container);
+        render();
+      }
+      return;
+    }
     if (!e.target.closest('[data-act="new"]')) return;
     const p = await newProjectDialog();
     if (p) navigate(`#/projects/${p.id}`);

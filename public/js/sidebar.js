@@ -2,7 +2,7 @@
 import { api, getMode } from './api.js';
 import { esc, el, $, icon, toast, bindMenu } from './ui.js';
 import { state, prefs, navigate, loadProjects } from './state.js';
-import { newProjectDialog } from './views/projects.js';
+import { newProjectDialog, deleteProject } from './views/projects.js';
 import { avatarSrc } from './avatar.js';
 
 const TASKS_PER_PROJECT = 8;
@@ -88,6 +88,7 @@ export function createSidebar({ onLogout }) {
               <span class="sb-row-actions">
                 <a class="icon-btn xs" href="#/projects/${p.id}" title="查看文件" data-stop>${icon('file')}</a>
                 <button class="icon-btn xs" data-new-in="${p.id}" title="在此项目中新聊天">${icon('compose')}</button>
+                <button class="icon-btn xs sb-del" data-del-proj="${p.id}" title="删除项目">${icon('trash')}</button>
               </span>
             </div>
             ${
@@ -149,6 +150,23 @@ export function createSidebar({ onLogout }) {
       prefs.set('projectId', newIn.dataset.newIn);
       closeMobile();
       return navigate('#/');
+    }
+    const delProj = t.closest('[data-del-proj]');
+    if (delProj) {
+      e.preventDefault();
+      const id = delProj.dataset.delProj;
+      const p = state.projects.find((x) => x.id === id);
+      if (!p) return;
+      try {
+        if (!(await deleteProject(p))) return;
+      } catch (err) {
+        return toast(err.message, 'error');
+      }
+      collapsed.delete(id);
+      // 正在查看这个项目或其中的任务时，回到首页
+      const wasHere = active.projectId === id || location.hash.startsWith(`#/projects/${id}`);
+      if (wasHere) navigate(location.hash.startsWith('#/projects/') ? '#/projects' : '#/');
+      return refresh();
     }
     const projRow = t.closest('[data-proj]');
     if (projRow) {
