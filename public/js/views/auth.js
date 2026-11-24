@@ -2,14 +2,35 @@
 import { api, getMode } from '../api.js';
 import { esc, $, icon, toast } from '../ui.js';
 import { state, loadConfig, navigate } from '../state.js';
-import { toggleTheme, syncThemeButton } from '../theme.js';
+import { getThemeMode, setThemeMode } from '../theme.js';
+
+function authThemeHtml() {
+  const opts = [
+    { id: 'system', icon: 'screen', label: '跟随系统', title: '默认跟随系统外观' },
+    { id: 'light', icon: 'sun', label: '浅色', title: '浅色模式（浅蓝 + 白）' },
+    { id: 'dark', icon: 'moon', label: '暗色', title: '暗色模式（酒红 + 黑）' },
+  ];
+  return `<div class="auth-theme-seg" role="radiogroup" aria-label="外观主题">${opts
+    .map((o) => `<button type="button" data-theme-opt="${o.id}" role="radio" aria-checked="false" title="${o.title}">${icon(o.icon)}<span>${o.label}</span></button>`)
+    .join('')}</div>`;
+}
 
 function bindAuthTheme(container) {
-  const btn = $(container, '.auth-theme-btn');
-  if (!btn) return () => {};
-  const sync = () => syncThemeButton(btn, { showLabel: true });
+  const seg = $(container, '.auth-theme-seg');
+  if (!seg) return () => {};
+  const sync = () => {
+    const mode = getThemeMode();
+    seg.querySelectorAll('[data-theme-opt]').forEach((b) => {
+      const active = b.dataset.themeOpt === mode;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-checked', String(active));
+    });
+  };
+  seg.addEventListener('click', (e) => {
+    const opt = e.target.closest('[data-theme-opt]');
+    if (opt) setThemeMode(opt.dataset.themeOpt);
+  });
   sync();
-  btn.addEventListener('click', toggleTheme);
   window.addEventListener('rty:theme-change', sync);
   return () => window.removeEventListener('rty:theme-change', sync);
 }
@@ -20,7 +41,7 @@ export async function authView(container) {
   if (getMode() === 'static') return keyLoginView(container, cfg);
   let mode = cfg.hasUsers ? 'login' : 'register';
 
-  container.innerHTML = `<div class="auth-page"><button type="button" class="auth-theme-btn"></button><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
+  container.innerHTML = `<div class="auth-page">${authThemeHtml()}<img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>
@@ -84,7 +105,7 @@ export async function authView(container) {
 
 // 纯静态模式：用 API Key 登录
 function keyLoginView(container, cfg) {
-  container.innerHTML = `<div class="auth-page"><button type="button" class="auth-theme-btn"></button><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
+  container.innerHTML = `<div class="auth-page">${authThemeHtml()}<img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>

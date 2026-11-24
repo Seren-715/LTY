@@ -22,7 +22,7 @@ export function resolveTheme(mode = getThemeMode()) {
 }
 
 export function isDarkTheme() {
-  return document.documentElement.dataset.theme === 'dark' || resolveTheme() === 'dark';
+  return resolveTheme() === 'dark';
 }
 
 export function applyTheme(mode = getThemeMode()) {
@@ -63,8 +63,11 @@ export function initTheme() {
 /** 同步主题切换按钮的图标、提示与文案 */
 export function syncThemeButton(btn, { showLabel = false } = {}) {
   if (!btn) return;
+  const mode = getThemeMode();
   const dark = isDarkTheme();
-  const label = dark ? '切换为浅色模式' : '切换为暗色模式';
+  const label = mode === 'system'
+    ? (dark ? '当前跟随系统（暗色），点击切换为浅色模式' : '当前跟随系统（浅色），点击切换为暗色模式')
+    : (dark ? '切换为浅色模式' : '切换为暗色模式');
   btn.title = label;
   btn.setAttribute('aria-label', label);
   btn.setAttribute('aria-pressed', String(dark));

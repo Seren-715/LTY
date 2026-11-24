@@ -203,13 +203,13 @@ async function staticSettings(container) {
 // —— 外观主题 ——
 function themeCardHtml() {
   const opts = [
+    { id: 'system', label: '跟随系统', desc: '默认 · 自动切换' },
     { id: 'light', label: '浅色模式', desc: '浅蓝 · 白' },
     { id: 'dark', label: '暗色模式', desc: '酒红 · 黑' },
-    { id: 'system', label: '跟随系统', desc: '自动切换' },
   ];
   return `<div class="card">
     <h2>${icon('moon')} 外观主题</h2>
-    <p class="sub">可在浅蓝白与酒红黑暗色模式之间随时切换</p>
+    <p class="sub">默认跟随系统外观，也可手动切换浅蓝白或酒红黑暗色模式</p>
     <div class="theme-picker" role="radiogroup" aria-label="外观主题">
       ${opts
         .map(
