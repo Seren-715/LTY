@@ -90,6 +90,17 @@ export async function taskView(container, id) {
 
   const composer = createComposer({
     initialModel: task.model,
+    dropZone: $(container, '.chat-col'),
+    async onFolder({ name, files, skipped }) {
+      const n = Object.keys(files).length;
+      const ok = await confirmDialog(`把文件夹「${name}」中的 ${n} 个文件导入到项目「${task.projectName}」？同名文件会被覆盖。`, { okText: '导入' });
+      if (!ok) return;
+      const r = await api.put(`/api/projects/${task.projectId}/files`, { files });
+      if (project) project.files = r.files;
+      if (panelOpen) renderPanel();
+      window.dispatchEvent(new Event('rty:refresh-sidebar'));
+      toast(`已导入 ${n} 个文件${skipped.length ? `，跳过 ${skipped.length} 个非文本或过大的文件` : ''}`, 'success', 4200);
+    },
     placeholder: '继续对话，Enter 发送，Shift + Enter 换行',
     async onSubmit({ prompt, attachments, model }) {
       task = await api.post(`/api/tasks/${id}/messages`, { prompt, attachments, model });

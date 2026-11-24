@@ -9,6 +9,64 @@ const MAX_IMAGES = 8;
 const MAX_FILES = 10;
 const IMAGE_MAX_SIDE = 1600;
 
+// —— 导入文件夹 ——
+const IGNORE_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', 'dist', 'build', 'out', '.next', '.nuxt', '.cache', '__pycache__', '.venv', 'venv', 'coverage', '.idea', '.vscode', 'target', 'vendor', '.DS_Store']);
+const PROJECT_FILE_MAX = 1024 * 1024;
+const PROJECT_MAX_FILES = 500;
+
+function readAllEntries(dirEntry) {
+  const reader = dirEntry.createReader();
+  const all = [];
+  return new Promise((resolve, reject) => {
+    const next = () =>
+      reader.readEntries((batch) => {
+        if (!batch.length) return resolve(all);
+        all.push(...batch);
+        next();
+      }, reject);
+    next();
+  });
+}
+
+async function walkEntry(entry, prefix, out) {
+  if (out.length > PROJECT_MAX_FILES * 4) return;
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej));
+    out.push({ path: prefix + entry.name, file });
+  } else if (entry.isDirectory && !IGNORE_DIRS.has(entry.name)) {
+    for (const child of await readAllEntries(entry)) await walkEntry(child, prefix + entry.name + '/', out);
+  }
+}
+
+/** 把 [{path, file}] 读成项目文件：跳过忽略目录、二进制和过大的文件 */
+async function readProjectFiles(list) {
+  const files = {};
+  const skipped = [];
+  let count = 0;
+  for (const { path, file } of list) {
+    const segs = path.split('/');
+    if (segs.some((s) => IGNORE_DIRS.has(s)) || segs[segs.length - 1] === '.DS_Store') continue;
+    const name = segs[segs.length - 1];
+    const textLike = TEXT_EXT.test(name) || file.type.startsWith('text/') || !name.includes('.') || /^\./.test(name);
+    if (!textLike || file.size > PROJECT_FILE_MAX) {
+      skipped.push(path);
+      continue;
+    }
+    if (count >= PROJECT_MAX_FILES) {
+      skipped.push(path);
+      continue;
+    }
+    const content = await file.text();
+    if (content.includes('\u0000')) {
+      skipped.push(path);
+      continue;
+    }
+    files[path] = content;
+    count++;
+  }
+  return { files, skipped };
+}
+
 let seq = 0;
 
 function readAsDataUrl(blob) {
@@ -88,7 +146,8 @@ export function createComposer(opts) {
           <button type="button" class="menu-item" data-add="file">${icon('paperclip')}添加文件</button>
           <button type="button" class="menu-item" data-add="image">${icon('image')}添加图片</button>
           ${canCaptureScreen() ? `<button type="button" class="menu-item" data-add="screen">${icon('screen')}截取屏幕</button>` : ''}
-          <div class="menu-tip">也可以直接粘贴截图或拖入文件</div>
+          ${opts.onFolder ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-add="folder">${icon('folder')}导入文件夹到项目</button>` : ''}
+          <div class="menu-tip">也可以把文件或文件夹直接拖到页面上，或粘贴截图</div>
         </div>
       </div>
       <span class="spacer"></span>
@@ -100,7 +159,7 @@ export function createComposer(opts) {
     </div>
     <input type="file" multiple class="hidden f-file">
     <input type="file" multiple accept="image/*" class="hidden f-image">
-    <div class="drop-hint hidden">松开以添加附件</div>
+    <input type="file" multiple webkitdirectory class="hidden f-dir">
   </div>`);
 
   const ta = $(root, 'textarea');
@@ -220,6 +279,7 @@ export function createComposer(opts) {
     plusPop.classList.add('hidden');
     if (act === 'file') $(root, '.f-file').click();
     else if (act === 'image') $(root, '.f-image').click();
+    else if (act === 'folder') $(root, '.f-dir').click();
     else if (act === 'screen') {
       try {
         const blob = await captureScreen();
@@ -239,25 +299,82 @@ export function createComposer(opts) {
       addFiles(files);
     }
   });
+  // —— 文件夹导入 ——
+  async function importFolder(name, list) {
+    if (!opts.onFolder) return;
+    toast(`正在读取文件夹「${name}」…`, 'info', 1500);
+    const { files, skipped } = await readProjectFiles(list);
+    if (!Object.keys(files).length) return toast('文件夹里没有可导入的文本文件', 'error');
+    await opts.onFolder({ name, files, skipped });
+  }
+
+  $(root, '.f-dir').onchange = async (e) => {
+    const picked = [...e.target.files];
+    e.target.value = '';
+    if (!picked.length) return;
+    // webkitRelativePath 形如 “文件夹/子目录/文件”，第一段是文件夹名
+    const name = picked[0].webkitRelativePath.split('/')[0] || '导入的项目';
+    const list = picked.map((f) => ({ path: f.webkitRelativePath.split('/').slice(1).join('/') || f.name, file: f }));
+    try {
+      await importFolder(name, list);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  // —— 拖拽：可以拖到整个页面区域 ——
+  const zone = opts.dropZone || root;
+  const overlay = el(`<div class="page-drop hidden"><div class="pd-box">${icon('upload')}<b>松开以添加</b><span>${
+    opts.onFolder ? '文件会作为附件随消息发送，文件夹会导入到项目中' : '文件会作为附件随消息发送'
+  }</span></div></div>`);
+  zone.classList.add('drop-zone');
+  zone.appendChild(overlay);
   let dragDepth = 0;
-  root.addEventListener('dragenter', (e) => {
-    if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  zone.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
     dragDepth++;
-    root.classList.add('dragging');
+    overlay.classList.remove('hidden');
   });
-  root.addEventListener('dragover', (e) => e.preventDefault());
-  root.addEventListener('dragleave', () => {
+  zone.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  zone.addEventListener('dragleave', () => {
     if (--dragDepth <= 0) {
       dragDepth = 0;
-      root.classList.remove('dragging');
+      overlay.classList.add('hidden');
     }
   });
-  root.addEventListener('drop', (e) => {
+  zone.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
     dragDepth = 0;
-    root.classList.remove('dragging');
-    if (e.dataTransfer?.files?.length) addFiles([...e.dataTransfer.files]);
+    overlay.classList.add('hidden');
+    const dt = e.dataTransfer;
+    // 必须在 drop 事件中同步取得 entry，之后才能异步读取
+    const entries = [...(dt.items || [])].filter((i) => i.kind === 'file').map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+    const dirs = entries.filter((en) => en.isDirectory);
+    try {
+      if (!dirs.length || !opts.onFolder) {
+        if (dirs.length) toast('这里不支持拖入文件夹，请拖入文件', 'error');
+        const loose = entries.length ? entries.filter((en) => en.isFile) : null;
+        const files = loose ? await Promise.all(loose.map((en) => new Promise((res, rej) => en.file(res, rej)))) : [...dt.files];
+        if (files.length) await addFiles(files);
+        return;
+      }
+      const looseFiles = await Promise.all(entries.filter((en) => en.isFile).map((en) => new Promise((res, rej) => en.file(res, rej))));
+      if (looseFiles.length) await addFiles(looseFiles);
+      for (const dir of dirs) {
+        const list = [];
+        for (const child of await readAllEntries(dir)) await walkEntry(child, '', list);
+        await importFolder(dir.name, list);
+      }
+    } catch (err) {
+      toast(`读取拖入的内容失败：${err.message || err}`, 'error');
+    }
   });
 
   // —— 发送 ——

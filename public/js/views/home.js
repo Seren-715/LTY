@@ -1,12 +1,10 @@
 // 首页（新聊天）：居中的一句话 + 底部输入框，风格参考 Codex
 import { api } from '../api.js';
-import { esc, $, icon, bindMenu } from '../ui.js';
+import { esc, $, icon, bindMenu, toast } from '../ui.js';
 import { state, loadProjects, loadConfig, prefs, navigate } from '../state.js';
 import { createComposer } from '../composer.js';
 import { sidebarToggleButton } from '../sidebar.js';
 import { newProjectDialog } from './projects.js';
-
-const SUGGESTIONS = ['做一个待办事项网页', '解释这个项目的结构', '找出潜在的 Bug'];
 
 export async function homeView(container) {
   await Promise.all([loadProjects(), loadConfig()]);
@@ -21,7 +19,6 @@ export async function homeView(container) {
       <div class="banner model-notice hidden">${icon('key')}<span class="grow"></span></div>
     </div>
     <div class="home-bottom">
-      <div class="suggestions">${SUGGESTIONS.map((s, i) => `<button class="chip" data-sug="${i}">${esc(s)}</button>`).join('')}</div>
       <div class="composer-slot"></div>
     </div>
   </div>`;
@@ -74,6 +71,23 @@ export async function homeView(container) {
   const composer = createComposer({
     placeholder: '描述你想做的事情，Enter 发送',
     autofocus: true,
+    dropZone: container,
+    async onFolder({ name, files, skipped }) {
+      const p = await api.post('/api/projects', { name: name.slice(0, 60), template: 'blank' });
+      try {
+        await api.put(`/api/projects/${p.id}/files`, { files });
+      } catch (e) {
+        await api.del(`/api/projects/${p.id}`).catch(() => {});
+        throw e;
+      }
+      projectId = p.id;
+      prefs.set('projectId', projectId);
+      await loadProjects();
+      renderProject();
+      window.dispatchEvent(new Event('rty:refresh-sidebar'));
+      toast(`已创建项目「${p.name}」并导入 ${Object.keys(files).length} 个文件${skipped.length ? `，跳过 ${skipped.length} 个非文本或过大的文件` : ''}`, 'success', 4200);
+      composer.focus();
+    },
     onModelsRefreshed: syncNotice,
     async onSubmit({ prompt, attachments, model }) {
       if (!state.config.configured) throw new Error(state.config.groupedModels ? '当前 API Key 没有可用模型，请检查分组后刷新。' : '尚未配置模型 API');
@@ -89,8 +103,6 @@ export async function homeView(container) {
     },
   });
   $(container, '.composer-slot').appendChild(composer.el);
-
-  container.querySelectorAll('[data-sug]').forEach((b) => (b.onclick = () => composer.setText(SUGGESTIONS[+b.dataset.sug])));
 
   return () => window.removeEventListener('rty:project-picked', onPicked);
 }
