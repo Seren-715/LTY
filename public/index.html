@@ -7,10 +7,27 @@
   <title>RTY Code</title>
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+  <script>
+    (function () {
+      var mode = 'system';
+      try {
+        var raw = localStorage.getItem('rty:theme');
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed === 'light' || parsed === 'dark' || parsed === 'system') mode = parsed;
+        }
+      } catch (e) {}
+      var dark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.themeMode = mode;
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', dark ? '#0c080a' : '#2b7de9');
+    })();
+  </script>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div id="app"><div class="loading-page"><span class="spin" style="width:20px;height:20px;color:#2b7de9"></span></div></div>
+  <div id="app"><div class="loading-page"><span class="spin" style="width:20px;height:20px"></span></div></div>
   <noscript>请启用 JavaScript 以使用本站。</noscript>
   <script src="config.js"></script>
   <script type="module" src="js/app.js"></script>

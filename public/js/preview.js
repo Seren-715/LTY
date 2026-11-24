@@ -1,6 +1,8 @@
 // 网页项目预览：把项目内的 CSS / JS / 图片等相对引用内联或转换为 data: URL，
 // 在 sandbox iframe（不带 allow-same-origin）中运行，项目代码无法访问本站 Cookie。
 
+import { isDarkTheme } from './theme.js';
+
 const MIME = {
   html: 'text/html', htm: 'text/html', css: 'text/css', js: 'text/javascript', mjs: 'text/javascript',
   json: 'application/json', svg: 'image/svg+xml', txt: 'text/plain', md: 'text/plain', xml: 'application/xml',
@@ -136,11 +138,19 @@ export function mountPreview(container, { getFiles, onLog }) {
     const entries = htmlEntries(files);
     if (!entry || !(entry in files)) entry = entries[0] || null;
     if (!entry) {
-      frame.srcdoc = `<body style="font:14px system-ui;color:#8696ad;display:grid;place-items:center;height:90vh;margin:0">项目中没有 HTML 文件，无法预览。<br>让智能体创建一个 index.html 试试。</body>`;
+      const dark = isDarkTheme();
+      const bg = dark ? '#110b0d' : '#ffffff';
+      const fg = dark ? '#957b85' : '#8696ad';
+      frame.srcdoc = `<body style="font:14px system-ui;background:${bg};color:${fg};display:grid;place-items:center;height:90vh;margin:0;text-align:center">项目中没有 HTML 文件，无法预览。<br>让智能体创建一个 index.html 试试。</body>`;
       return;
     }
     frame.srcdoc = buildPreview(files, entry);
   };
+
+  const onThemeChange = () => {
+    if (!entry) render();
+  };
+  window.addEventListener('rty:theme-change', onThemeChange);
 
   const onMessage = (e) => {
     if (e.source !== frame.contentWindow || !e.data || !e.data.__preview) return;
@@ -167,6 +177,7 @@ export function mountPreview(container, { getFiles, onLog }) {
     onEntry: null,
     destroy() {
       window.removeEventListener('message', onMessage);
+      window.removeEventListener('rty:theme-change', onThemeChange);
       frame.remove();
     },
   };

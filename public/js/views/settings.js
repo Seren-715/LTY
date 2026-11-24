@@ -3,6 +3,7 @@ import { api, getMode } from '../api.js';
 import { esc, $, icon, toast, formatDate, confirmDialog, promptDialog } from '../ui.js';
 import { downloadBlob } from '../zip.js';
 import { state, navigate } from '../state.js';
+import { getThemeMode, setThemeMode } from '../theme.js';
 import { avatarSrc, chooseAvatar } from '../avatar.js';
 import { formatUsageCost } from '../sidebar.js';
 
@@ -22,6 +23,7 @@ export async function settingsView(container) {
         <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
       </div>
     </div>
+    ${themeCardHtml()}
     <form class="card pw">
       <h2>修改密码</h2>
       <p class="sub">修改后，其他设备上的登录会失效</p>
@@ -35,6 +37,7 @@ export async function settingsView(container) {
   </div>`;
 
   bindAvatar(container, user);
+  const cleanupTheme = bindThemeCard(container);
   $(container, '[data-act="logout"]').onclick = async () => {
     await api.post('/api/auth/logout').catch(() => {});
     state.user = null;
@@ -52,6 +55,7 @@ export async function settingsView(container) {
       toast(err.message, 'error');
     }
   };
+  return cleanupTheme;
 }
 
 function renderKeySpending(balance) {
@@ -91,6 +95,7 @@ async function staticSettings(container) {
         <button class="btn danger" data-act="logout">${icon('logout')}退出登录</button>
       </div>
     </div>
+    ${themeCardHtml()}
     <div class="card">
       <h2>${icon('key')} <span class="balance-title">API Key 用量</span></h2>
       <p class="sub balance-note">由 API 平台统计，可能有几分钟延迟。</p>
@@ -111,6 +116,7 @@ async function staticSettings(container) {
   </div>`;
 
   bindAvatar(container, user);
+  const cleanupTheme = bindThemeCard(container);
   const box = $(container, '.balance-box');
   const balanceTitle = $(container, '.balance-title');
   const balanceNote = $(container, '.balance-note');
@@ -190,6 +196,53 @@ async function staticSettings(container) {
     } catch (err) {
       toast(err instanceof SyntaxError ? '文件不是合法的 JSON' : err.message, 'error');
     }
+  };
+  return cleanupTheme;
+}
+
+// —— 外观主题 ——
+function themeCardHtml() {
+  const opts = [
+    { id: 'light', label: '浅色模式', desc: '浅蓝 · 白' },
+    { id: 'dark', label: '暗色模式', desc: '酒红 · 黑' },
+    { id: 'system', label: '跟随系统', desc: '自动切换' },
+  ];
+  return `<div class="card">
+    <h2>${icon('moon')} 外观主题</h2>
+    <p class="sub">可在浅蓝白与酒红黑暗色模式之间随时切换</p>
+    <div class="theme-picker" role="radiogroup" aria-label="外观主题">
+      ${opts
+        .map(
+          (o) => `<button type="button" class="theme-opt" data-theme-opt="${o.id}" role="radio" aria-checked="false">
+            <span class="theme-swatch ${o.id}" aria-hidden="true"></span>
+            <span class="theme-opt-meta"><b>${o.label}</b><span>${o.desc}</span></span>
+          </button>`,
+        )
+        .join('')}
+    </div>
+  </div>`;
+}
+
+function bindThemeCard(container) {
+  const sync = () => {
+    const mode = getThemeMode();
+    container.querySelectorAll('[data-theme-opt]').forEach((b) => {
+      const active = b.dataset.themeOpt === mode;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-checked', String(active));
+    });
+  };
+  const onClick = (e) => {
+    const opt = e.target.closest('[data-theme-opt]');
+    if (!opt) return;
+    setThemeMode(opt.dataset.themeOpt);
+  };
+  container.addEventListener('click', onClick);
+  window.addEventListener('rty:theme-change', sync);
+  sync();
+  return () => {
+    container.removeEventListener('click', onClick);
+    window.removeEventListener('rty:theme-change', sync);
   };
 }
 

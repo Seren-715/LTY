@@ -2,6 +2,17 @@
 import { api, getMode } from '../api.js';
 import { esc, $, icon, toast } from '../ui.js';
 import { state, loadConfig, navigate } from '../state.js';
+import { toggleTheme, syncThemeButton } from '../theme.js';
+
+function bindAuthTheme(container) {
+  const btn = $(container, '.auth-theme-btn');
+  if (!btn) return () => {};
+  const sync = () => syncThemeButton(btn, { showLabel: true });
+  sync();
+  btn.addEventListener('click', toggleTheme);
+  window.addEventListener('rty:theme-change', sync);
+  return () => window.removeEventListener('rty:theme-change', sync);
+}
 
 export async function authView(container) {
   await loadConfig().catch(() => {});
@@ -9,7 +20,7 @@ export async function authView(container) {
   if (getMode() === 'static') return keyLoginView(container, cfg);
   let mode = cfg.hasUsers ? 'login' : 'register';
 
-  container.innerHTML = `<div class="auth-page"><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
+  container.innerHTML = `<div class="auth-page"><button type="button" class="auth-theme-btn"></button><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>
@@ -68,11 +79,12 @@ export async function authView(container) {
       submit.disabled = false;
     }
   });
+  return bindAuthTheme(container);
 }
 
 // 纯静态模式：用 API Key 登录
 function keyLoginView(container, cfg) {
-  container.innerHTML = `<div class="auth-page"><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
+  container.innerHTML = `<div class="auth-page"><button type="button" class="auth-theme-btn"></button><img class="auth-deco" src="img/login-deco.jpg" alt="" draggable="false"><div class="auth-card">
     <div class="logo">${icon('logo')}</div>
     <h1>${esc(cfg.siteName)}</h1>
     <p class="tagline">你的 AI 代码编写智能体</p>
@@ -109,4 +121,5 @@ function keyLoginView(container, cfg) {
       submit.textContent = '登录';
     }
   });
+  return bindAuthTheme(container);
 }

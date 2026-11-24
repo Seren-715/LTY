@@ -2,6 +2,7 @@
 import { api, getMode } from './api.js';
 import { esc, el, $, icon, toast, bindMenu } from './ui.js';
 import { state, prefs, navigate, loadProjects } from './state.js';
+import { toggleTheme, syncThemeButton } from './theme.js';
 import { newProjectDialog, deleteProject } from './views/projects.js';
 import { avatarSrc } from './avatar.js';
 
@@ -29,6 +30,7 @@ export function createSidebar({ onLogout }) {
   const root = el(`<aside class="sidebar">
     <div class="sb-head">
       <a class="brand" href="#/"><span class="logo">${icon('logo')}</span><span class="site-name"></span></a>
+      <button type="button" class="icon-btn theme-toggle" data-act="toggle-theme"></button>
       <button class="icon-btn sb-hide" title="收起侧栏">${icon('sidebar')}</button>
     </div>
     <div class="sb-nav">
@@ -58,6 +60,8 @@ export function createSidebar({ onLogout }) {
 
   const list = $(root, '.sb-list');
   const searchBox = $(root, '.sb-search');
+  const themeBtn = $(root, '.theme-toggle');
+  syncThemeButton(themeBtn);
   bindMenu($(root, '.sb-user'), $(root, '.sb-foot .menu-pop'));
 
   function renderUser() {
@@ -235,6 +239,9 @@ export function createSidebar({ onLogout }) {
     } else if (act === 'archived') {
       showArchived = !showArchived;
       render();
+    } else if (act === 'toggle-theme') {
+      toggleTheme();
+      return;
     } else if (act === 'logout') onLogout();
     if (t.closest('a[href]')) closeMobile();
   });
@@ -264,9 +271,11 @@ export function createSidebar({ onLogout }) {
     refreshBalance(true, true);
   };
   const onUsageRefresh = () => refreshBalance(true);
+  const onThemeChange = () => syncThemeButton(themeBtn);
   window.addEventListener('rty:refresh-sidebar', onRefreshSidebar);
   window.addEventListener('rty:task-end', onTaskEnd);
   window.addEventListener('rty:usage-refresh', onUsageRefresh);
+  window.addEventListener('rty:theme-change', onThemeChange);
 
   return {
     el: root,
@@ -284,6 +293,7 @@ export function createSidebar({ onLogout }) {
       window.removeEventListener('rty:refresh-sidebar', onRefreshSidebar);
       window.removeEventListener('rty:task-end', onTaskEnd);
       window.removeEventListener('rty:usage-refresh', onUsageRefresh);
+      window.removeEventListener('rty:theme-change', onThemeChange);
     },
   };
 }
