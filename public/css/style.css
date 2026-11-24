@@ -549,6 +549,12 @@ a.card:hover { text-decoration: none; border-color: #bcd3f1; box-shadow: var(--s
 .table th { text-align: left; font-weight: 600; color: var(--text-3); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .table td { padding: 10px; border-bottom: 1px solid var(--border); }
 .table tr:last-child td { border-bottom: 0; }
+.usage-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; font-size: 13px; }
+.usage-summary strong { display: block; font-size: 22px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.usage-detail { margin-top: 20px; }
+.usage-table td:first-child { overflow-wrap: anywhere; }
+.usage-table :is(th, td):last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.usage-updated { margin: 12px 0 0; font-size: 12px; }
 .meter { height: 8px; border-radius: 999px; background: var(--surface-3); margin-top: 14px; overflow: hidden; }
 .meter span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #5aa6ff, var(--primary)); }
 .result-box { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 13px; white-space: pre-wrap; word-break: break-word; }

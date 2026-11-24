@@ -3,7 +3,7 @@
 // 项目和任务保存在浏览器 IndexedDB 中，智能体直接在页面里运行。
 import { Collection, idb, newId, sha256Hex } from './db.js';
 import { runAgent, buildUserMessage, titleFromMessage } from '../core/agent.js';
-import { getKeyInfo, listModels } from '../core/llm.js';
+import { getKeyInfo, getTangguoUsage, listModels } from '../core/llm.js';
 import { diffStats } from '../core/diff.js';
 import { normPath, checkWrite, LIMITS } from '../core/files.js';
 import { templateList, templateFiles } from '../core/templates.js';
@@ -12,12 +12,14 @@ const SITE = window.RTY_CONFIG || {};
 const SESSION_KEY = 'rty:session';
 const modelCatalog = Array.isArray(SITE.modelCatalog) ? SITE.modelCatalog : [];
 const groupedModels = modelCatalog.length > 0;
+const tangguoUsage = SITE.usageProvider === 'tangguo';
 
 const projects = new Collection('projects');
 const tasks = new Collection('tasks');
 let session = null; // { accountId, key, nickname, createdAt, apiBaseUrl }
 let modelCache = null;
 let modelRefresh = null;
+let usageLookup = null;
 const runs = new Map(); // taskId -> { controller, listeners:Set<fn>, partial }
 
 class HttpError extends Error {
@@ -57,6 +59,7 @@ function readSession() {
 
 async function activate(s) {
   session = s;
+  usageLookup = null;
   try {
     session.avatar = (await idb.get('accounts', s.accountId))?.avatar || null;
   } catch {
@@ -330,7 +333,7 @@ route(
     let info;
     let discoveredModels = null;
     try {
-      if (!groupedModels) info = await getKeyInfo(cfg, signal);
+      if (!groupedModels && !tangguoUsage) info = await getKeyInfo(cfg, signal);
       if (!info) discoveredModels = await discoverModels(cfg, signal);
     } catch (e) {
       if (e.status === 401 || e.status === 403) throw new HttpError(401, 'API Key 无效，请检查是否复制完整');
@@ -359,6 +362,7 @@ route(
     for (const r of runs.values()) r.controller.abort();
     localStorage.removeItem(SESSION_KEY);
     session = null;
+    usageLookup = null;
     modelCache = null;
     modelRefresh = null;
     projects.items.clear();
@@ -393,12 +397,33 @@ route('POST', '/api/auth/avatar', async ({ body }) => {
   return { user: publicUser() };
 });
 
-route('GET', '/api/balance', async () => {
-  if (groupedModels) return { unsupported: true };
+function personalUsage(refresh) {
+  if (usageLookup?.session !== session) usageLookup = { session };
+  const lookup = usageLookup;
+  if (lookup.pending) return lookup.pending;
+  if (!refresh && Date.now() - (lookup.fetchedAt || 0) < 30000) return lookup.data;
+  lookup.pending = getTangguoUsage(apiCfg(), AbortSignal.timeout(15000))
+    .then((data) => {
+      if (lookup.session !== session) throw new Error('登录状态已变更，请重新查询');
+      lookup.data = data || { unsupported: true, source: 'tangguo' };
+      lookup.fetchedAt = Date.now();
+      return lookup.data;
+    })
+    .finally(() => { lookup.pending = null; });
+  return lookup.pending;
+}
+
+route('GET', '/api/balance', async ({ query }) => {
+  if (!tangguoUsage && groupedModels) return { unsupported: true };
   try {
+    if (tangguoUsage) return await personalUsage(query.refresh === '1');
     const info = await getKeyInfo(apiCfg(), AbortSignal.timeout(15000));
     return info || { unsupported: true };
   } catch (e) {
+    if (tangguoUsage) {
+      const detail = e instanceof TypeError ? '请检查网络或站点代理是否转发 /v1/usage' : e.message;
+      throw new HttpError(502, `唐果用量查询失败：${detail}`);
+    }
     throw new HttpError(e.status === 401 ? 401 : 502, e.message);
   }
 });
