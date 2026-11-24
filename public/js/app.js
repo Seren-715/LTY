@@ -2,6 +2,7 @@
 import { api, setUnauthorizedHandler, initBackend } from './api.js';
 import { esc, el, $, icon, toast } from './ui.js';
 import { state, loadConfig, navigate } from './state.js';
+import { initTheme } from './theme.js';
 import { createSidebar } from './sidebar.js';
 import { authView } from './views/auth.js';
 import { homeView } from './views/home.js';
@@ -112,6 +113,7 @@ setUnauthorizedHandler(() => {
 });
 
 (async function start() {
+  initTheme();
   try {
     await initBackend();
     await loadConfig();
