@@ -137,14 +137,14 @@ export function mountPreview(container, { getFiles, onLog }) {
     const entries = htmlEntries(files);
     if (!entry || !(entry in files)) entry = entries[0] || null;
     if (!entry) {
-      frame.srcdoc = `<body style="font:14px system-ui;color:#8696ad;display:grid;place-items:center;height:90vh;margin:0">项目中没有 HTML 文件，无法预览。<br>让智能体创建一个 index.html 试试。</body>`;
+      frame.srcdoc = `<body style="font:14px system-ui;color:#5f6f86;display:grid;place-items:center;height:90vh;margin:0">项目中没有 HTML 文件，无法预览。<br>让智能体创建一个 index.html 试试。</body>`;
       return;
     }
     if (entry === 'index.html' && needsBuild(files)) {
       frame.srcdoc = `<body style="font:14px/1.8 system-ui;color:#475a73;display:grid;place-items:center;height:90vh;margin:0;text-align:center;padding:0 20px">
         <div><div style="font-size:34px">📦</div><b style="color:#0f1e33;font-size:15px">这是需要构建的 npm 项目（如 Vue）</b><br>预览面板无法直接运行。请点「下载项目 ZIP」，解压后在项目目录打开命令行运行<br>
-        <code style="display:inline-block;margin-top:6px;padding:4px 12px;border-radius:8px;background:#eef5ff;color:#2b7de9;font-size:14px">npm run dev</code><br>
-        <span style="color:#8696ad;font-size:12.5px">第一次运行会自动安装依赖，完成后自动打开浏览器</span></div></body>`;
+        <code style="display:inline-block;margin-top:6px;padding:4px 12px;border-radius:8px;background:#eef5ff;color:#2272dc;font-size:14px">npm run dev</code><br>
+        <span style="color:#5f6f86;font-size:12.5px">第一次运行会自动安装依赖，完成后自动打开浏览器</span></div></body>`;
       return;
     }
     frame.srcdoc = buildPreview(files, entry);

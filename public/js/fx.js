@@ -2,7 +2,7 @@
 // 思路与参数移植自以下 MIT 许可的开源项目，改写为不依赖框架的原生 JS：
 //   · Bencho（© 2026 Lorenzo Cabra）：界面音效（Web Audio 合成，无音频文件）
 //     其中 Plop 改编自 cuelume（© 2026 Daniel Belyi）
-//   · Magic UI（© Magic UI）：Ripple Button、Magic Card、Number Ticker、Confetti、Particles、Blur Fade
+//   · Magic UI（© Magic UI）：Ripple Button、Number Ticker、Confetti、Particles、Blur Fade
 //   · Preline UI（© Preline Labs Ltd.）：Tooltip、Toggle Password
 // 所有动画都会在系统开启「减少动态效果」时自动关闭。
 
@@ -113,23 +113,6 @@ function onRipple(e) {
   btn.classList.add('fx-ripple-host');
   btn.appendChild(s);
   setTimeout(() => s.remove(), 650);
-}
-
-// ================= 光标聚光卡片（Magic UI · Magic Card） =================
-const SPOT_SEL = 'a.card, .fx-spot';
-let spotCard = null;
-function onSpot(e) {
-  const card = e.target.closest?.(SPOT_SEL);
-  if (spotCard && spotCard !== card) {
-    // 离开卡片后把光斑移出可见范围
-    spotCard.style.setProperty('--mx', '-300px');
-    spotCard.style.setProperty('--my', '-300px');
-  }
-  spotCard = card;
-  if (!card) return;
-  const r = card.getBoundingClientRect();
-  card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-  card.style.setProperty('--my', `${e.clientY - r.top}px`);
 }
 
 // ================= 数字滚动（Magic UI · Number Ticker） =================
@@ -407,7 +390,6 @@ export function installFx() {
   if (installed) return;
   installed = true;
   document.addEventListener('pointerdown', onRipple, true);
-  document.addEventListener('pointermove', onSpot, { passive: true });
   document.addEventListener('pointerover', onTipOver);
   document.addEventListener('pointerdown', hideTip, true);
   window.addEventListener('scroll', hideTip, true);

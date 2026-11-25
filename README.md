@@ -155,3 +155,16 @@ public/              ← 纯静态模式只需要上传这个文件夹
 - 预览在不带 `allow-same-origin` 的沙箱 iframe 中运行，项目代码无法读取本站 Cookie 或调用本站接口
 - 智能体只能操作项目的虚拟文件，**不会在服务器上执行任何代码或命令**
 - 单文件 1MB、单项目 500 个文件 / 20MB 的限制
+
+## 测试
+
+```bash
+npm test          # 单元测试（无需安装任何依赖）
+npm run test:e2e  # 端到端测试：在真实浏览器里走一遍登录、发任务、下载、删除项目、拖入文件夹、Vue 项目等流程
+```
+
+端到端测试用 `tests/helpers` 里的模拟模型接口，不消耗额度。需要先安装 Playwright（只用于测试，网站本身仍然零依赖）：
+
+```bash
+npm i -D playwright && npx playwright install chromium
+```

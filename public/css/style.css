@@ -8,12 +8,12 @@
   --border-strong: #c9d9ef;
   --text: #0f1e33;
   --text-2: #475a73;
-  --text-3: #8696ad;
-  --primary: #2b7de9;
-  --primary-hover: #1c6bd6;
+  --text-3: #5f6f86; /* 白底 5.1:1，侧栏底 4.8:1 */
+  --primary: #2272dc; /* 白字 4.7:1 */
+  --primary-hover: #1b66c9;
   --primary-soft: #e5f0ff;
   --primary-softer: #f1f7ff;
-  --primary-ring: rgba(43, 125, 233, 0.22);
+  --primary-ring: rgba(34, 114, 220, 0.22);
   --green: #12a150;
   --green-soft: #e7f7ee;
   --red: #dc3b3b;
@@ -661,17 +661,6 @@ a.card:hover .card-del, .card-del:focus-visible { opacity: 1; }
 .fx-ripple { position: absolute; border-radius: 50%; pointer-events: none; background: currentColor; opacity: .22; transform: scale(0); animation: fx-ripple .6s ease-out forwards; z-index: -1; }
 .btn.primary .fx-ripple, .send-btn .fx-ripple { background: #fff; opacity: .35; }
 @keyframes fx-ripple { to { transform: scale(2.6); opacity: 0; } }
-
-/* 光标聚光卡片 · Magic UI Magic Card：边框和底色跟随鼠标发光 */
-a.card {
-  --mx: -300px; --my: -300px;
-  border-color: transparent;
-  background:
-    radial-gradient(240px circle at var(--mx) var(--my), rgba(90, 166, 255, .09), transparent 70%) padding-box,
-    linear-gradient(var(--surface), var(--surface)) padding-box,
-    radial-gradient(220px circle at var(--mx) var(--my), #6fb1ff, #01d0be 35%, var(--border) 70%) border-box;
-}
-a.card:hover { border-color: transparent; }
 
 /* 运行中的输入框：沿边框流动的光束 · Magic UI Border Beam */
 @property --fx-beam { syntax: '<angle>'; inherits: false; initial-value: 0deg; }

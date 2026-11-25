@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import { esc, el, $, icon, modal, timeAgo, confirmDialog, toast } from '../ui.js';
 import { state, loadProjects, navigate, prefs } from '../state.js';
-import { play, blurIn } from '../fx.js';
+import { play } from '../fx.js';
 
 /** 删除项目（确认后执行）。返回是否已删除 */
 export async function deleteProject(p) {
@@ -94,7 +94,6 @@ export async function projectsView(container) {
   };
   await loadProjects();
   render();
-  blurIn(grid.querySelectorAll('.card'));
   container.addEventListener('click', async (e) => {
     const del = e.target.closest('[data-del-proj]');
     if (del) {

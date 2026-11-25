@@ -1,0 +1,164 @@
+// 端到端测试：在真实浏览器里以纯静态模式打开网站，模型接口用 tests/helpers 里的模拟服务
+// 运行：npm run test:e2e（需要 Playwright：npm i -D playwright && npx playwright install chromium）
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
+import { startStatic, startMockLLM, TEST_KEY } from '../helpers/servers.mjs';
+
+let playwright;
+try {
+  playwright = createRequire(import.meta.url)('playwright');
+} catch {
+  /* 没装 Playwright 时跳过 */
+}
+const skip = playwright ? false : '未安装 Playwright（npm i -D playwright && npx playwright install chromium）';
+
+let site, llm, browser;
+before(async () => {
+  if (skip) return;
+  [site, llm] = await Promise.all([startStatic(), startMockLLM()]);
+  browser = await playwright.chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+});
+after(async () => {
+  await browser?.close();
+  site?.close();
+  llm?.close();
+});
+
+/** 新开一个干净的浏览器上下文并登录，返回 { page, errors } */
+async function login() {
+  const ctx = await browser.newContext({ viewport: { width: 1360, height: 820 }, acceptDownloads: true });
+  await ctx.route('**/config.js', (r) =>
+    r.fulfill({ contentType: 'text/javascript', body: `window.RTY_CONFIG={mode:'static',apiBaseUrl:'${llm.url}/v1',models:['mock-coder']}` }),
+  );
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(site.url + '/');
+  await page.fill('#k', TEST_KEY);
+  await page.click('button[type=submit]');
+  await page.waitForSelector('.home .composer');
+  return { page, errors, ctx };
+}
+
+const api = (page, method, path, body) =>
+  page.evaluate(
+    async ([m, p, b]) => {
+      const { api } = await import('/js/api.js');
+      return m === 'get' ? api.get(p) : api[m](p, b);
+    },
+    [method, path, body],
+  );
+
+test('登录页：粒子背景、显示 Key 按钮，错误的 Key 会提示', { skip }, async () => {
+  const ctx = await browser.newContext();
+  await ctx.route('**/config.js', (r) => r.fulfill({ contentType: 'text/javascript', body: `window.RTY_CONFIG={mode:'static',apiBaseUrl:'${llm.url}/v1'}` }));
+  const page = await ctx.newPage();
+  await page.goto(site.url + '/');
+  await page.waitForSelector('.auth-card .fx-pw-btn');
+  assert.equal(await page.locator('.fx-particles').count(), 1);
+  await page.fill('#k', 'sk-wrong');
+  await page.click('.fx-pw-btn');
+  assert.equal(await page.getAttribute('#k', 'type'), 'text');
+  await page.click('button[type=submit]');
+  await page.waitForSelector('.form-error:not(:empty)');
+  await ctx.close();
+});
+
+test('发送任务：智能体写文件、显示变更卡片，顶栏菜单可以点击', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  await page.fill('.home textarea', '做一个待办事项网页');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.changes-card', { timeout: 15000 });
+  assert.match(await page.textContent('.changes-card'), /已修改 2 个文件/);
+  assert.equal(await page.locator('.composer.running').count(), 0, '结束后输入框不再显示运行光束');
+
+  // 回归：顶栏「⋯」菜单曾被消息区盖住
+  await page.click('.more-btn');
+  const item = page.locator('.more-pop [data-act="dl-all"]');
+  const box = await item.boundingBox();
+  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-act]')?.dataset.act, [box.x + box.width / 2, box.y + box.height / 2]);
+  assert.equal(hit, 'dl-all');
+  const [dl] = await Promise.all([page.waitForEvent('download'), item.click()]);
+  // 无头浏览器会把中文文件名报告成 “download”，这里直接检查内容是 ZIP
+  const buf = await readFile(await dl.path());
+  assert.equal(buf.subarray(0, 2).toString(), 'PK');
+  assert.ok(buf.includes(Buffer.from('index.html')));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ctrl+K 命令面板：搜索并跳转', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('.palette');
+  await page.keyboard.type('设置');
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/#\/settings$/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('删除项目：卡片上的删除按钮需要确认', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  const p = await api(page, 'post', '/api/projects', { name: '要删除的项目', template: 'web' });
+  await page.goto(site.url + '/#/projects');
+  const card = page.locator(`a.card[href="#/projects/${p.id}"]`);
+  await card.hover();
+  await card.locator('.card-del').click();
+  await page.click('.dialog .btn:not(.danger):not(.primary)'); // 取消
+  assert.equal(await card.count(), 1);
+  await card.hover();
+  await card.locator('.card-del').click();
+  await page.click('.dialog .btn.danger');
+  await page.waitForFunction((id) => !document.querySelector(`a.card[href="#/projects/${id}"]`), p.id);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('拖入文件夹：首页新建项目并导入文本文件，跳过 node_modules 和二进制', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  await page.evaluate(() => {
+    const file = (name, content, type = 'text/plain') => ({ isFile: true, isDirectory: false, name, file: (ok) => ok(new File([content], name, { type })) });
+    const dir = (name, children) => ({
+      isFile: false,
+      isDirectory: true,
+      name,
+      createReader() {
+        let done = false;
+        return { readEntries: (ok) => ok(done ? [] : ((done = true), children)) };
+      },
+    });
+    const root = dir('拖入的项目', [file('index.html', '<h1>hi</h1>', 'text/html'), dir('src', [file('main.js', 'console.log(1)')]), dir('node_modules', [file('x.js', 'x')]), file('a.bin', 'a\u0000b', 'application/octet-stream')]);
+    const ev = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'dataTransfer', { value: { types: ['Files'], items: [{ kind: 'file', webkitGetAsEntry: () => root }], files: [] } });
+    document.querySelector('.view-root').dispatchEvent(ev);
+  });
+  await page.waitForFunction(() => document.querySelector('.proj-pick')?.textContent.includes('拖入的项目'));
+  const list = await api(page, 'get', '/api/projects');
+  const proj = await api(page, 'get', '/api/projects/' + list.find((x) => x.name === '拖入的项目').id);
+  assert.deepEqual(Object.keys(proj.files).sort(), ['index.html', 'src/main.js']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Vue 项目：生成骨架、自动补全依赖，下载后可直接 npm run dev', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  const p = await api(page, 'post', '/api/projects', { name: 'vue-demo', template: 'blank' });
+  await page.evaluate((id) => localStorage.setItem('rty:projectId', JSON.stringify(id)), p.id);
+  await page.reload();
+  await page.waitForSelector('.home .composer');
+  await page.fill('.home textarea', '用 Vue 做一个显示日期的页面');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.changes-card', { timeout: 15000 });
+  assert.match(await page.textContent('.thread'), /生成项目骨架/);
+  assert.match(await page.textContent('.thread'), /已自动补全项目文件/);
+  const files = (await api(page, 'get', '/api/projects/' + p.id)).files;
+  const pkg = JSON.parse(files['package.json']);
+  assert.equal(pkg.dependencies.dayjs?.startsWith('^'), true, '代码里用到的 dayjs 被补进依赖');
+  assert.equal(pkg.scripts.predev, 'node scripts/ensure-deps.mjs');
+  assert.ok(files['src/components/Today.vue'] && files['vite.config.js']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
