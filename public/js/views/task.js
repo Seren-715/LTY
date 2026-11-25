@@ -106,15 +106,28 @@ export async function taskView(container, id) {
       toast(`已导入 ${n} 个文件${skipped.length ? `，跳过 ${skipped.length} 个非文本或过大的文件` : ''}`, 'success', 4200);
     },
     placeholder: '继续对话，Enter 发送，Shift + Enter 换行',
-    async onSubmit({ prompt, attachments, model }) {
-      task = await api.post(`/api/tasks/${id}/messages`, { prompt, attachments, model });
-      partial = null;
-      renderAll(true);
-      subscribe();
-      window.dispatchEvent(new Event('rty:refresh-sidebar'));
-    },
+    onSubmit: sendMessage,
     onStop: () => api.post(`/api/tasks/${id}/stop`).catch((err) => toast(err.message, 'error')),
   });
+  async function sendMessage({ prompt, attachments, model }) {
+    task = await api.post(`/api/tasks/${id}/messages`, { prompt, attachments, model });
+    partial = null;
+    renderAll(true);
+    subscribe();
+    window.dispatchEvent(new Event('rty:refresh-sidebar'));
+  }
+
+  // 预览报错 → 发给智能体修复
+  async function fixPreviewErrors({ errors, entry }) {
+    if (running()) return toast('智能体正在运行，请等它完成后再发送报错', 'error');
+    const prompt = `在「预览」中打开 ${entry || '页面'} 时出现了下面的报错，请找出原因并修复：\n\n\`\`\`\n${errors.join('\n')}\n\`\`\``;
+    try {
+      await sendMessage({ prompt, attachments: [], model: task.model });
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
   $(container, '.dock-inner').appendChild(composer.el);
   // 背景插画始终贴在输入框上方
   const dockEl = $(container, '.dock');
@@ -331,7 +344,7 @@ export async function taskView(container, id) {
     } else if (panelTab === 'files') {
       panelInst = mountFileBrowser(panelBody, { getFiles: () => project.files, getMarks: () => new Set(Object.keys(task.changes || {})) });
     } else {
-      panelInst = mountPreviewPanel(panelBody, { getFiles: () => project.files });
+      panelInst = mountPreviewPanel(panelBody, { getFiles: () => project.files, onFix: fixPreviewErrors });
     }
   }
 

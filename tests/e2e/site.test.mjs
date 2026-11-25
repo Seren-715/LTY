@@ -166,6 +166,29 @@ test('技能：选择网页主题后，智能体读取 theme-factory 技能说�
   await ctx.close();
 });
 
+test('预览报错：一键发给智能体修复', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  const p = await api(page, 'post', '/api/projects', { name: '有 bug 的页面', template: 'blank' });
+  await api(page, 'put', `/api/projects/${p.id}/files`, { files: { 'index.html': '<h1>hi</h1>\n<script>notDefinedFn()</script>\n' } });
+  const t = await api(page, 'post', '/api/tasks', { projectId: p.id, prompt: '看看有没有报错', model: 'mock-coder' });
+  await page.goto(`${site.url}/#/tasks/${t.id}`);
+  await page.waitForFunction(() => document.querySelector('.thread')?.textContent.includes('已根据报错修复'));
+  await page.click('[data-panel="preview"]');
+  const fix = page.locator('.fix-btn:not(.hidden)');
+  await fix.waitFor({ timeout: 10000 });
+  assert.match(await fix.textContent(), /让智能体修复（1）/);
+  const before = llm.requests.length;
+  await fix.click();
+  await page.waitForFunction(() => document.querySelectorAll('.msg.user').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('.msg.assistant').length >= 2);
+  const sent = JSON.stringify(llm.requests[before].messages.at(-1).content);
+  assert.match(sent, /notDefinedFn is not defined/);
+  assert.match(sent, /index\.html/);
+  // 预览 iframe 里故意制造的报错也会被 Playwright 记到页面上，排除它
+  assert.deepEqual(errors.filter((e) => !e.includes('notDefinedFn')), []);
+  await ctx.close();
+});
+
 test('Vue 项目：生成骨架、自动补全依赖，下载后可直接 npm run dev', { skip }, async () => {
   const { page, errors, ctx } = await login();
   const p = await api(page, 'post', '/api/projects', { name: 'vue-demo', template: 'blank' });

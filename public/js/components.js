@@ -153,7 +153,7 @@ export function renderChanges(container, changes, { onRevert, onRevertAll, readO
 }
 
 // —— 预览面板（带页面选择和控制台） ——
-export function mountPreviewPanel(container, { getFiles }) {
+export function mountPreviewPanel(container, { getFiles, onFix }) {
   container.innerHTML = `<div class="preview-wrap">
     <div class="panel-toolbar">
       ${icon('eye')}<select class="pill-select select entry" style="max-width:260px"></select>
@@ -161,14 +161,26 @@ export function mountPreviewPanel(container, { getFiles }) {
       <button class="btn sm ghost" data-act="refresh" title="刷新">${icon('refresh')}刷新</button>
     </div>
     <div class="frame-host" style="flex:1;display:flex;min-height:0"></div>
-    <div class="console-head">${icon('terminal')}控制台 <span class="c-count"></span><span class="spacer"></span><button class="btn ghost sm" data-act="clear">清空</button><button class="btn ghost sm" data-act="toggle">收起</button></div>
+    <div class="console-head">${icon('terminal')}控制台 <span class="c-count"></span><span class="spacer"></span>${onFix ? `<button class="btn soft sm fix-btn hidden" data-act="fix" title="把报错发给智能体，让它找出原因并修复">${icon('sparkle')}<span></span></button>` : ''}<button class="btn ghost sm" data-act="clear">清空</button><button class="btn ghost sm" data-act="toggle">收起</button></div>
     <div class="console"></div>
   </div>`;
   const consoleEl = $(container, '.console');
   const countEl = $(container, '.c-count');
   const select = $(container, '.entry');
   let count = 0;
+  // 收集报错，供「让智能体修复」使用（去重，最多 10 条）
+  let errors = [];
+  const fixBtn = container.querySelector('.fix-btn');
+  const syncFix = () => {
+    if (!fixBtn) return;
+    fixBtn.classList.toggle('hidden', !errors.length);
+    fixBtn.querySelector('span').textContent = `让智能体修复（${errors.length}）`;
+  };
   const log = ({ level, text }) => {
+    if (level === 'error' && errors.length < 10 && !errors.includes(text)) {
+      errors.push(String(text).slice(0, 800));
+      syncFix();
+    }
     count++;
     countEl.textContent = `(${count})`;
     const line = el(`<div class="c-line ${level === 'error' ? 'error' : level === 'warn' ? 'warn' : ''}"></div>`);
@@ -180,6 +192,8 @@ export function mountPreviewPanel(container, { getFiles }) {
     consoleEl.innerHTML = '';
     count = 0;
     countEl.textContent = '';
+    errors = [];
+    syncFix();
   };
   const preview = mountPreview($(container, '.frame-host'), { getFiles, onLog: log });
   const fillSelect = () => {
@@ -200,6 +214,11 @@ export function mountPreviewPanel(container, { getFiles }) {
       fillSelect();
       preview.refresh();
     } else if (a === 'clear') clear();
+    else if (a === 'fix') {
+      const list = errors.slice();
+      clear();
+      onFix?.({ errors: list, entry: preview.entry });
+    }
     else if (a === 'toggle') {
       consoleEl.classList.toggle('hidden');
       e.target.closest('button').textContent = consoleEl.classList.contains('hidden') ? '展开' : '收起';
