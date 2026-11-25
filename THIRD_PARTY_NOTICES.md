@@ -156,3 +156,7 @@ The author reserves the right to terminate the rights granted under this Fair Us
 | `compiler-sfc.esm-browser.min.js` | @vue/compiler-sfc 3.5.46 | © 2018-present, Yuxi (Evan) You |
 | `vue-router.esm-browser.prod.js` | vue-router 5.5.1 | © 2019-present Eduardo San Martin Morote |
 | `pinia.esm-browser.prod.js` | pinia 4.1.0 | © 2019-present Eduardo San Martin Morote |
+
+## PDF.js（public/vendor/pdfjs/）
+
+`pdf.min.mjs`、`pdf.worker.min.mjs` 和 `cmaps/` 来自 [pdfjs-dist](https://github.com/mozilla/pdf.js) 6.5.438（Mozilla），未作修改，按 Apache License 2.0 授权，许可证原文见 `public/vendor/pdfjs/LICENSE.txt`。用于在浏览器里提取 PDF 附件中的文字。

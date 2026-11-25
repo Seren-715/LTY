@@ -237,3 +237,37 @@ test('Vue 预览：在网站里直接运行 .vue、vue-router 和 pinia', { skip
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('文档附件：PDF / Word / Excel / PPT 在浏览器里提取文字后发给智能体', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  const fx = (n) => new URL(`../fixtures/${n}`, import.meta.url).pathname;
+  await page.setInputFiles('.home .f-file', [fx('sample-cid.pdf'), fx('sample-office.pdf'), fx('sample.docx'), fx('sample.xlsx'), fx('sample.pptx')]);
+  await page.waitForFunction(() => document.querySelectorAll('.att-file').length === 5, null, { timeout: 30000 });
+  const chips = await page.$$eval('.att-file .att-size', (e) => e.map((x) => x.textContent));
+  assert.ok(chips.filter((c) => c.startsWith('PDF · 已提取文字')).length === 2, chips.join(' / '));
+  await page.fill('.home textarea', '根据这些文件看看有没有报错');
+  const before = llm.requests.length;
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector('.thread')?.textContent.includes('已根据报错修复'));
+  const sent = llm.requests[before].messages.find((m) => m.role === 'user').content;
+  const text = typeof sent === 'string' ? sent : sent.map((p) => p.text || '').join('\n');
+  assert.match(text, /实验报告：二分查找/, 'CID 字体 PDF（需要 CMap）');
+  assert.match(text, /第二页：结论/);
+  assert.match(text, /课程设计要求[\s\S]*图书管理/, 'LibreOffice 导出的 PDF / Word');
+  assert.match(text, /张三,92,"优秀, 继续保持"/);
+  assert.match(text, /备注：这里讲五分钟/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('文档附件：旧版 .doc 和扫描件给出提示', { skip }, async () => {
+  const { page, ctx } = await login();
+  await page.setInputFiles('.home .f-file', { name: '旧作业.doc', mimeType: 'application/msword', buffer: Buffer.from('xx') });
+  await page.waitForSelector('.toast.error');
+  assert.match(await page.textContent('.toast.error'), /另存为 \.docx/);
+  assert.equal(await page.locator('.att-file').count(), 0);
+  await page.setInputFiles('.home .f-file', new URL('../fixtures/sample-scan.pdf', import.meta.url).pathname);
+  await page.waitForFunction(() => [...document.querySelectorAll('.toast.error')].some((t) => t.textContent.includes('扫描件')), null, { timeout: 20000 });
+  assert.equal(await page.locator('.att-file').count(), 0);
+  await ctx.close();
+});

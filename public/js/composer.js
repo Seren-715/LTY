@@ -1,6 +1,8 @@
 // 输入框组件：文字 + 附件（文件 / 图片 / 截屏 / 粘贴 / 拖拽）+ 模型选择 + 发送
 import { esc, el, $, icon, toast, autosize, bindMenu, modal } from './ui.js';
 import { THEMES } from './core/skills.js';
+import { isDocFile, isLegacyOffice, extractDocText } from './docs.js';
+import { ATTACH_LIMITS } from './core/agent.js';
 import { state, loadConfig, prefs } from './state.js';
 import { play, shake } from './fx.js';
 
@@ -150,7 +152,7 @@ export function createComposer(opts) {
           ${canCaptureScreen() ? `<button type="button" class="menu-item" data-add="screen">${icon('screen')}截取屏幕</button>` : ''}
           <button type="button" class="menu-item" data-add="theme">${icon('sparkle')}选择网页主题…</button>
           ${opts.onFolder ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-add="folder">${icon('folder')}导入文件夹到项目</button>` : ''}
-          <div class="menu-tip">也可以把文件或文件夹直接拖到页面上，或粘贴截图</div>
+          <div class="menu-tip">支持代码、文本、图片和 PDF / Word / Excel / PPT；也可以直接拖到页面上，或粘贴截图</div>
         </div>
       </div>
       <span class="spacer"></span>
@@ -221,7 +223,7 @@ export function createComposer(opts) {
           ? `<div class="att att-theme" title="网页主题：${esc(a.name)}"><span class="att-sw">${a.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span class="att-meta"><span class="att-name">主题：${esc(a.zh)}</span><span class="att-size">${esc(a.name)}</span></span><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`
           : a.type === 'image'
           ? `<div class="att att-img" title="${esc(a.name)}"><img src="${a.dataUrl}" alt=""><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`
-          : `<div class="att att-file" title="${esc(a.name)}"><span class="att-ic">${icon('file')}</span><span class="att-meta"><span class="att-name">${esc(a.name)}</span><span class="att-size">${(a.size / 1024).toFixed(a.size < 10240 ? 1 : 0)} KB</span></span><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`,
+          : `<div class="att att-file" title="${esc(a.name)}"><span class="att-ic">${icon('file')}</span><span class="att-meta"><span class="att-name">${esc(a.name)}</span><span class="att-size">${a.doc ? `${a.doc} · 已提取文字 · ` : ''}${a.size >= 1048576 ? (a.size / 1048576).toFixed(1) + ' MB' : (a.size / 1024).toFixed(a.size < 10240 ? 1 : 0) + ' KB'}</span></span><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`,
       )
       .join('');
   };
@@ -265,9 +267,37 @@ export function createComposer(opts) {
     }
   }
 
+  // PDF / Word / Excel / PPT：在浏览器里提取文字后作为文本附件
+  async function addDoc(f) {
+    if (attachments.filter((a) => a.type === 'file').length >= MAX_FILES) throw new Error(`最多添加 ${MAX_FILES} 个文件`);
+    const slow = setTimeout(() => toast(`正在读取 ${f.name}…`, 'info', 2000), 400);
+    try {
+      const { text, kind } = await extractDocText(f);
+      const limit = ATTACH_LIMITS.fileChars - 200;
+      const body = text.length > limit ? text.slice(0, limit) + '\n…（内容过长，后面的部分已省略）' : text;
+      attachments.push({ id: ++seq, type: 'file', name: f.name, content: `（以下是从 ${kind} 文件中提取的文字，排版和图片没有保留）\n${body}`, size: f.size, doc: kind });
+    } finally {
+      clearTimeout(slow);
+    }
+  }
+
   async function addFiles(fileList) {
     const skipped = [];
     for (const f of fileList) {
+      if (isDocFile(f.name)) {
+        try {
+          await addDoc(f);
+        } catch (e) {
+          shake(root);
+          toast(`${f.name}：${e.message}`, 'error', 4200);
+        }
+        continue;
+      }
+      if (isLegacyOffice(f.name)) {
+        shake(root);
+        toast(`${f.name} 是旧版 Office 格式，请在 Word / Excel / PowerPoint 里另存为 .docx / .xlsx / .pptx 后再添加`, 'error', 5000);
+        continue;
+      }
       if (f.type.startsWith('image/') && !/svg/.test(f.type)) {
         await addImage(f, f.name);
         continue;
@@ -289,10 +319,10 @@ export function createComposer(opts) {
       attachments.push({ id: ++seq, type: 'file', name: f.name, content, size: f.size });
     }
     renderAttachments();
-    if (fileList.length > skipped.length) play('wisp');
+    if (attachments.length) play('wisp');
     if (skipped.length) {
       shake(root);
-      toast(`已跳过：${skipped.join('、')}（仅支持 300KB 以内的文本文件和图片）`, 'error', 4200);
+      toast(`已跳过：${skipped.join('、')}（支持 300KB 以内的文本 / 代码文件、图片，以及 PDF、Word、Excel、PPT 文档）`, 'error', 4200);
     }
   }
 
