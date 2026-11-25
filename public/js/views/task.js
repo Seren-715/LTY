@@ -9,6 +9,7 @@ import { renderChanges, mountFileBrowser, mountPreviewPanel } from '../component
 import { createComposer } from '../composer.js';
 import { sidebarToggleButton } from '../sidebar.js';
 import { downloadZip } from '../zip.js';
+import { play, confettiFrom, blurIn } from '../fx.js';
 
 const TOOL_LABEL = {
   list_files: '查看文件列表',
@@ -253,9 +254,14 @@ export async function taskView(container, id) {
       }
     }
     thread.innerHTML = out.join('');
+    // 新出现的消息做一次模糊淡入（首次打开页面时不做，避免整页闪动）
+    const blocks = thread.querySelectorAll(':scope > .msg:not(.streaming), :scope > .changes-card, :scope > .error-box');
+    if (shownBlocks >= 0 && blocks.length > shownBlocks) blurIn([...blocks].slice(shownBlocks), { step: 60 });
+    shownBlocks = blocks.length;
     renderStreaming();
     if (stick) toBottom();
   }
+  let shownBlocks = -1;
 
   let streamRaf = 0;
   function renderStreaming() {
@@ -483,10 +489,20 @@ export async function taskView(container, id) {
         task = ev.task;
         partial = null;
         renderAll();
+        celebrate();
         window.dispatchEvent(new Event('rty:refresh-sidebar'));
         loadProject().then(() => !destroyed && renderPanel());
         break;
     }
+  }
+
+  // 任务结束的反馈：完成且改了文件时喷一小簇彩纸
+  function celebrate() {
+    if (task.status === 'completed') {
+      play('landed');
+      if (Object.keys(task.changes || {}).length) setTimeout(() => confettiFrom($(thread, '.changes-card')), 120);
+    } else if (task.status === 'failed') play('buzz');
+    else if (task.status === 'stopped') play('hush');
   }
 
   function subscribe() {

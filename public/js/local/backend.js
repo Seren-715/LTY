@@ -292,7 +292,7 @@ function startRun(task) {
       runs.delete(task.id);
       const ev = { type: 'end', task: publicTask(task, true) };
       for (const fn of run.listeners) fn(clone(ev));
-      window.dispatchEvent(new CustomEvent('rty:task-end', { detail: { id: task.id } }));
+      window.dispatchEvent(new CustomEvent('rty:task-end', { detail: { id: task.id, status: task.status } }));
     });
 }
 

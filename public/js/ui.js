@@ -1,4 +1,5 @@
 // 通用 UI 工具：转义、DOM 构建、图标、提示、弹窗、时间格式化
+import { play } from './fx.js';
 
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -75,6 +76,7 @@ export function toast(msg, type = 'info', ms = 2600) {
     document.body.appendChild(toastBox);
   }
   const t = el(`<div class="toast ${type}">${esc(msg)}</div>`);
+  if (type === 'error') play('bump');
   toastBox.appendChild(t);
   setTimeout(() => t.remove(), ms);
 }
@@ -229,6 +231,7 @@ export async function copyText(text) {
     document.execCommand('copy');
     ta.remove();
   }
+  play('latch');
   toast('已复制', 'success', 1400);
 }
 

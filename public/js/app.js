@@ -10,6 +10,8 @@ import { projectsView } from './views/projects.js';
 import { projectView } from './views/project.js';
 import { settingsView } from './views/settings.js';
 import { adminView } from './views/admin.js';
+import { installFx, play } from './fx.js';
+import { installPalette } from './palette.js';
 
 const app = document.getElementById('app');
 
@@ -119,6 +121,14 @@ setUnauthorizedHandler(() => {
     app.innerHTML = `<div class="loading-page"><div><div class="error-box">无法连接服务器：${esc(e.message)}</div></div></div>`;
     return;
   }
+  installFx();
+  installPalette();
+  // 不在该任务页面时，任务结束也给一个提示音（在任务页面时由任务页自己处理）
+  window.addEventListener('rty:task-end', (e) => {
+    const { id, status } = e.detail || {};
+    if (!id || location.hash === `#/tasks/${id}`) return;
+    play(status === 'completed' ? 'landed' : status === 'failed' ? 'buzz' : 'hush', { volume: 0.8 });
+  });
   window.addEventListener('hashchange', router);
   router();
 })();

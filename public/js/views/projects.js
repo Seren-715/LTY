@@ -2,6 +2,7 @@
 import { api } from '../api.js';
 import { esc, el, $, icon, modal, timeAgo, confirmDialog, toast } from '../ui.js';
 import { state, loadProjects, navigate, prefs } from '../state.js';
+import { play, blurIn } from '../fx.js';
 
 /** 删除项目（确认后执行）。返回是否已删除 */
 export async function deleteProject(p) {
@@ -12,6 +13,7 @@ export async function deleteProject(p) {
   );
   if (!ok) return false;
   await api.del(`/api/projects/${p.id}`);
+  play('sigh');
   if (prefs.get('projectId') === p.id) prefs.set('projectId', null);
   await loadProjects();
   window.dispatchEvent(new Event('rty:refresh-sidebar'));
@@ -92,6 +94,7 @@ export async function projectsView(container) {
   };
   await loadProjects();
   render();
+  blurIn(grid.querySelectorAll('.card'));
   container.addEventListener('click', async (e) => {
     const del = e.target.closest('[data-del-proj]');
     if (del) {

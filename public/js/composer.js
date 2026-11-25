@@ -1,6 +1,7 @@
 // 输入框组件：文字 + 附件（文件 / 图片 / 截屏 / 粘贴 / 拖拽）+ 模型选择 + 发送
 import { esc, el, $, icon, toast, autosize, bindMenu } from './ui.js';
 import { state, loadConfig, prefs } from './state.js';
+import { play, shake } from './fx.js';
 
 const TEXT_EXT =
   /\.(html?|css|scss|less|js|mjs|cjs|jsx|ts|tsx|json|jsonc|md|markdown|txt|log|py|java|go|rs|c|h|cpp|hpp|cc|cs|php|rb|sh|bash|zsh|bat|ps1|yml|yaml|toml|ini|cfg|conf|env|xml|svg|vue|svelte|sql|kt|swift|dart|lua|r|csv|tsv|gitignore|editorconfig|dockerfile|makefile|gradle|properties)$/i;
@@ -262,7 +263,11 @@ export function createComposer(opts) {
       attachments.push({ id: ++seq, type: 'file', name: f.name, content, size: f.size });
     }
     renderAttachments();
-    if (skipped.length) toast(`已跳过：${skipped.join('、')}（仅支持 300KB 以内的文本文件和图片）`, 'error', 4200);
+    if (fileList.length > skipped.length) play('wisp');
+    if (skipped.length) {
+      shake(root);
+      toast(`已跳过：${skipped.join('、')}（仅支持 300KB 以内的文本文件和图片）`, 'error', 4200);
+    }
   }
 
   $(root, '.f-file').onchange = (e) => {
@@ -395,6 +400,7 @@ export function createComposer(opts) {
     if (!model) return toast('没有可用的模型', 'error');
     busy = true;
     syncSend();
+    play('plop');
     try {
       await opts.onSubmit({
         prompt,
@@ -429,6 +435,7 @@ export function createComposer(opts) {
     focus: () => ta.focus(),
     setRunning(v) {
       running = !!v;
+      root.classList.toggle('running', running);
       syncSend();
     },
     setText(t) {

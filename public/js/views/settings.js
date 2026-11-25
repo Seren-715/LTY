@@ -5,6 +5,7 @@ import { downloadBlob } from '../zip.js';
 import { state, navigate } from '../state.js';
 import { avatarSrc, chooseAvatar } from '../avatar.js';
 import { formatUsageCost } from '../sidebar.js';
+import { tickAll } from '../fx.js';
 
 export async function settingsView(container) {
   if (getMode() === 'static') return staticSettings(container);
@@ -129,6 +130,7 @@ async function staticSettings(container) {
         box.innerHTML = b.unsupported
           ? '<span class="muted">API 平台未提供当前 Key 的消费数据。</span>'
           : renderKeySpending(b);
+        tickAll(box, '.usage-summary strong');
         return;
       }
       balanceTitle.textContent = '额度';

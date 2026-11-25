@@ -5,6 +5,7 @@ import { state, loadProjects, loadConfig, prefs, navigate } from '../state.js';
 import { createComposer } from '../composer.js';
 import { sidebarToggleButton } from '../sidebar.js';
 import { newProjectDialog } from './projects.js';
+import { blurIn } from '../fx.js';
 
 export async function homeView(container) {
   await Promise.all([loadProjects(), loadConfig()]);
@@ -23,6 +24,7 @@ export async function homeView(container) {
     </div>
   </div>`;
 
+  blurIn(container.querySelectorAll('.home-center > :not(.hidden), .home-bottom'), { step: 90 });
   const pick = $(container, '.proj-pick');
   const pop = $(container, '.proj-pop');
   bindMenu(pick, pop);

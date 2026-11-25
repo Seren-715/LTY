@@ -2,6 +2,7 @@
 import { api, getMode } from '../api.js';
 import { esc, $, icon, toast } from '../ui.js';
 import { state, loadConfig, navigate } from '../state.js';
+import { mountParticles, passwordToggle, blurIn } from '../fx.js';
 
 export async function authView(container) {
   await loadConfig().catch(() => {});
@@ -30,6 +31,9 @@ export async function authView(container) {
   const form = $(container, 'form');
   const errEl = $(container, '.form-error');
   const submit = $(form, 'button[type=submit]');
+  mountParticles($(container, '.auth-page'));
+  blurIn([$(container, '.auth-card')]);
+  form.querySelectorAll('input[type=password]').forEach(passwordToggle);
 
   const sync = () => {
     container.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
@@ -88,6 +92,9 @@ function keyLoginView(container, cfg) {
   const form = $(container, 'form');
   const errEl = $(container, '.form-error');
   const submit = $(form, 'button[type=submit]');
+  mountParticles($(container, '.auth-page'));
+  blurIn([$(container, '.auth-card')]);
+  form.querySelectorAll('input[type=password]').forEach(passwordToggle);
   setTimeout(() => form.key.focus(), 50);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

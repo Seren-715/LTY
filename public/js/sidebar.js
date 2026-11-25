@@ -4,6 +4,8 @@ import { esc, el, $, icon, toast, bindMenu } from './ui.js';
 import { state, prefs, navigate, loadProjects } from './state.js';
 import { newProjectDialog, deleteProject } from './views/projects.js';
 import { avatarSrc } from './avatar.js';
+import { tickText, soundEnabled, setSoundEnabled } from './fx.js';
+import { openPalette, paletteKey } from './palette.js';
 
 const TASKS_PER_PROJECT = 8;
 
@@ -33,8 +35,7 @@ export function createSidebar({ onLogout }) {
     </div>
     <div class="sb-nav">
       <a class="sb-item" href="#/" data-nav="home">${icon('compose')}<span>新聊天</span></a>
-      <button class="sb-item" data-act="search">${icon('search')}<span>搜索</span></button>
-      <div class="sb-search hidden"><input placeholder="搜索任务或项目"></div>
+      <button class="sb-item" data-act="search">${icon('search')}<span class="grow">搜索</span><kbd class="sb-kbd">${paletteKey}</kbd></button>
     </div>
     <div class="sb-section"><span class="grow">项目</span>
       <a class="icon-btn sm" href="#/projects" title="所有项目">${icon('folder')}</a>
@@ -50,6 +51,7 @@ export function createSidebar({ onLogout }) {
       <div class="menu-pop up hidden">
         <a class="menu-item" href="#/settings">${icon('user')}账号设置</a>
         <a class="menu-item admin-link" href="#/admin">${icon('shield')}站点管理</a>
+        <button class="menu-item" data-act="sound"><span class="sound-ico"></span><span class="grow">界面音效</span><span class="switch-mini"></span></button>
         <div class="menu-sep"></div>
         <button class="menu-item danger" data-act="logout">${icon('logout')}退出登录</button>
       </div>
@@ -57,7 +59,6 @@ export function createSidebar({ onLogout }) {
   </aside>`);
 
   const list = $(root, '.sb-list');
-  const searchBox = $(root, '.sb-search');
   bindMenu($(root, '.sb-user'), $(root, '.sb-foot .menu-pop'));
 
   function renderUser() {
@@ -159,11 +160,11 @@ export function createSidebar({ onLogout }) {
       box.classList.remove('low');
       if (b.source === 'tangguo') {
         const cost = b.today?.cost;
-        box.textContent = Number.isFinite(cost) ? `今日消费 ${formatUsageCost(cost, b.currency)}` : '';
+        tickText(box, Number.isFinite(cost) ? `今日消费 ${formatUsageCost(cost, b.currency)}` : '');
         return;
       }
       if (b.unsupported) return (box.textContent = '');
-      box.textContent = b.remaining != null ? `余额 $${Number(b.remaining).toFixed(2)}` : `已用 $${Number(b.usage || 0).toFixed(2)}`;
+      tickText(box, b.remaining != null ? `余额 $${Number(b.remaining).toFixed(2)}` : `已用 $${Number(b.usage || 0).toFixed(2)}`);
       box.classList.toggle('low', b.remaining != null && b.remaining < 0.2);
     } catch {
       if (isCurrent()) {
@@ -218,13 +219,11 @@ export function createSidebar({ onLogout }) {
     }
     const act = t.closest('[data-act]')?.dataset.act;
     if (act === 'search') {
-      searchBox.classList.toggle('hidden');
-      if (!searchBox.classList.contains('hidden')) $(searchBox, 'input').focus();
-      else {
-        query = '';
-        $(searchBox, 'input').value = '';
-        render();
-      }
+      closeMobile();
+      openPalette();
+    } else if (act === 'sound') {
+      setSoundEnabled(!soundEnabled());
+      syncSound();
     } else if (act === 'new-project') {
       const p = await newProjectDialog();
       if (p) {
@@ -237,10 +236,6 @@ export function createSidebar({ onLogout }) {
       render();
     } else if (act === 'logout') onLogout();
     if (t.closest('a[href]')) closeMobile();
-  });
-  $(searchBox, 'input').addEventListener('input', (e) => {
-    query = e.target.value.trim();
-    render();
   });
 
   // 收起 / 展开（桌面）与抽屉（手机）
@@ -258,6 +253,14 @@ export function createSidebar({ onLogout }) {
   if (prefs.get('sbHidden', false)) document.body.classList.add('sb-collapsed');
   $(root, '.sb-hide').onclick = toggle;
 
+  const syncSound = () => {
+    const on = soundEnabled();
+    const b = $(root, '[data-act="sound"]');
+    b.classList.toggle('on', on);
+    $(b, '.sound-ico').innerHTML = icon(on ? 'bolt' : 'x');
+  };
+  syncSound();
+  window.addEventListener('rty:sound-changed', syncSound);
   const onRefreshSidebar = () => refresh();
   const onTaskEnd = () => {
     refresh();
@@ -284,6 +287,7 @@ export function createSidebar({ onLogout }) {
       window.removeEventListener('rty:refresh-sidebar', onRefreshSidebar);
       window.removeEventListener('rty:task-end', onTaskEnd);
       window.removeEventListener('rty:usage-refresh', onUsageRefresh);
+      window.removeEventListener('rty:sound-changed', syncSound);
     },
   };
 }
