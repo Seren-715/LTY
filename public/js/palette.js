@@ -54,7 +54,12 @@ export async function openPalette() {
   const close = () => {
     overlay.remove();
     document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('focusin', keepFocus, true);
     open = null;
+  };
+  // 面板打开时焦点留在面板里（页面上其他输入框的自动聚焦不能把焦点抢走）
+  const keepFocus = (e) => {
+    if (!overlay.contains(e.target)) input.focus();
   };
   open = { focus: () => input.focus(), close };
 
@@ -112,6 +117,7 @@ export async function openPalette() {
     list.querySelector('.pl-item.active')?.scrollIntoView({ block: 'nearest' });
   }
   function onKey(e) {
+    if (['Escape', 'ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
@@ -128,6 +134,7 @@ export async function openPalette() {
     }
   }
   document.addEventListener('keydown', onKey, true);
+  document.addEventListener('focusin', keepFocus, true);
   overlay.addEventListener('mousedown', (e) => {
     if (e.target === overlay) close();
   });

@@ -47,6 +47,7 @@ const toolCall = (index, id, name, args) => ({ index, id, type: 'function', func
  * 模拟模型：
  *  · 消息里有 “vue” → 调用 scaffold_project，再写一个用到 dayjs 的组件
  *  · 消息里有 “报错” → 直接回复（用于测试把预览报错发给智能体）
+ *  · 消息里点名 theme-factory → 先 use_skill 读取技能说明，再回复
  *  · 其他 → 查看文件、写 index.html / app.js，然后总结
  */
 export async function startMockLLM() {
@@ -83,6 +84,10 @@ export async function startMockLLM() {
       const tools = (calls) => sse(res, { choices: [{ delta: { tool_calls: calls }, finish_reason: 'tool_calls' }] });
 
       if (/报错/.test(text)) finish('已根据报错修复。');
+      else if (/theme-factory/.test(text)) {
+        if (steps === 0) tools([toolCall(0, 's1', 'use_skill', { name: 'theme-factory' })]);
+        else finish('已按主题完成。');
+      }
       else if (/vue/i.test(text)) {
         if (steps === 0) tools([toolCall(0, 'v1', 'scaffold_project', { template: 'vue' })]);
         else if (steps === 1) {

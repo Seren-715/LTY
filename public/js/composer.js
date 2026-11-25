@@ -1,5 +1,6 @@
 // 输入框组件：文字 + 附件（文件 / 图片 / 截屏 / 粘贴 / 拖拽）+ 模型选择 + 发送
-import { esc, el, $, icon, toast, autosize, bindMenu } from './ui.js';
+import { esc, el, $, icon, toast, autosize, bindMenu, modal } from './ui.js';
+import { THEMES } from './core/skills.js';
 import { state, loadConfig, prefs } from './state.js';
 import { play, shake } from './fx.js';
 
@@ -147,6 +148,7 @@ export function createComposer(opts) {
           <button type="button" class="menu-item" data-add="file">${icon('paperclip')}添加文件</button>
           <button type="button" class="menu-item" data-add="image">${icon('image')}添加图片</button>
           ${canCaptureScreen() ? `<button type="button" class="menu-item" data-add="screen">${icon('screen')}截取屏幕</button>` : ''}
+          <button type="button" class="menu-item" data-add="theme">${icon('sparkle')}选择网页主题…</button>
           ${opts.onFolder ? `<div class="menu-sep"></div><button type="button" class="menu-item" data-add="folder">${icon('folder')}导入文件夹到项目</button>` : ''}
           <div class="menu-tip">也可以把文件或文件夹直接拖到页面上，或粘贴截图</div>
         </div>
@@ -215,7 +217,9 @@ export function createComposer(opts) {
     row.classList.toggle('hidden', !attachments.length);
     row.innerHTML = attachments
       .map((a) =>
-        a.type === 'image'
+        a.type === 'theme'
+          ? `<div class="att att-theme" title="网页主题：${esc(a.name)}"><span class="att-sw">${a.colors.map((c) => `<i style="background:${c}"></i>`).join('')}</span><span class="att-meta"><span class="att-name">主题：${esc(a.zh)}</span><span class="att-size">${esc(a.name)}</span></span><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`
+          : a.type === 'image'
           ? `<div class="att att-img" title="${esc(a.name)}"><img src="${a.dataUrl}" alt=""><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`
           : `<div class="att att-file" title="${esc(a.name)}"><span class="att-ic">${icon('file')}</span><span class="att-meta"><span class="att-name">${esc(a.name)}</span><span class="att-size">${(a.size / 1024).toFixed(a.size < 10240 ? 1 : 0)} KB</span></span><button type="button" class="att-x" data-rm="${a.id}" title="移除">${icon('x')}</button></div>`,
       )
@@ -227,6 +231,28 @@ export function createComposer(opts) {
     attachments = attachments.filter((a) => String(a.id) !== b.dataset.rm);
     renderAttachments();
   });
+
+  // —— 网页主题（theme-factory 技能） ——
+  function pickTheme() {
+    const current = attachments.find((a) => a.type === 'theme')?.themeId;
+    const body = el(`<div class="theme-grid">${THEMES.map(
+      (t) => `<button type="button" class="theme-opt ${t.id === current ? 'active' : ''}" data-theme="${t.id}">
+        <span class="theme-sw">${t.colors.map((c) => `<i style="background:${c.hex}" title="${esc(c.name)} ${c.hex}"></i>`).join('')}</span>
+        <b>${esc(t.zh)}</b><span>${esc(t.name)}</span></button>`,
+    ).join('')}</div><p class="muted" style="margin:12px 0 0;font-size:12.5px">选好后随消息发送，智能体会用这套配色和字体来做页面。</p>`);
+    const m = modal({ title: '选择网页主题', body, width: '560px', actions: [{ label: '取消' }] });
+    body.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-theme]');
+      if (!b) return;
+      const t = THEMES.find((x) => x.id === b.dataset.theme);
+      attachments = attachments.filter((a) => a.type !== 'theme');
+      attachments.unshift({ id: ++seq, type: 'theme', themeId: t.id, name: t.name, zh: t.zh, colors: t.colors.map((c) => c.hex) });
+      renderAttachments();
+      syncSend();
+      m.close();
+      ta.focus();
+    });
+  }
 
   async function addImage(blob, name) {
     if (attachments.filter((a) => a.type === 'image').length >= MAX_IMAGES) return toast(`最多添加 ${MAX_IMAGES} 张图片`, 'error');
@@ -284,6 +310,7 @@ export function createComposer(opts) {
     plusPop.classList.add('hidden');
     if (act === 'file') $(root, '.f-file').click();
     else if (act === 'image') $(root, '.f-image').click();
+    else if (act === 'theme') pickTheme();
     else if (act === 'folder') $(root, '.f-dir').click();
     else if (act === 'screen') {
       try {
@@ -395,7 +422,9 @@ export function createComposer(opts) {
   async function submit() {
     if (running) return opts.onStop?.();
     if (busy) return;
-    const prompt = ta.value.trim();
+    const theme = attachments.find((a) => a.type === 'theme');
+    let prompt = ta.value.trim();
+    if (theme) prompt = `${prompt || '按这个主题美化页面'}\n\n（网页主题：请使用 theme-factory 技能中的「${theme.name}」主题）`;
     if (!prompt && !attachments.length) return ta.focus();
     if (!model) return toast('没有可用的模型', 'error');
     busy = true;
@@ -405,7 +434,7 @@ export function createComposer(opts) {
       await opts.onSubmit({
         prompt,
         model,
-        attachments: attachments.map((a) => (a.type === 'image' ? { type: 'image', name: a.name, dataUrl: a.dataUrl } : { type: 'file', name: a.name, content: a.content })),
+        attachments: attachments.filter((a) => a.type !== 'theme').map((a) => (a.type === 'image' ? { type: 'image', name: a.name, dataUrl: a.dataUrl } : { type: 'file', name: a.name, content: a.content })),
       });
       ta.value = '';
       attachments = [];

@@ -95,7 +95,7 @@ test('Ctrl+K 命令面板：搜索并跳转', { skip }, async () => {
   await page.waitForSelector('.palette');
   await page.keyboard.type('设置');
   await page.keyboard.press('Enter');
-  await page.waitForURL(/#\/settings$/);
+  await page.waitForFunction(() => location.hash === '#/settings');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -139,6 +139,29 @@ test('拖入文件夹：首页新建项目并导入文本文件，跳过 node_mo
   const list = await api(page, 'get', '/api/projects');
   const proj = await api(page, 'get', '/api/projects/' + list.find((x) => x.name === '拖入的项目').id);
   assert.deepEqual(Object.keys(proj.files).sort(), ['index.html', 'src/main.js']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('技能：选择网页主题后，智能体读取 theme-factory 技能说明', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  await page.click('.home .plus-btn');
+  await page.click('[data-add="theme"]');
+  await page.click('[data-theme="ocean-depths"]');
+  assert.match(await page.textContent('.att-theme'), /深海/);
+  await page.fill('.home textarea', '做一个个人主页');
+  const before = llm.requests.length;
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.changes-card, .msg.assistant .content', { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('.thread')?.textContent.includes('已按主题完成'));
+  const reqs = llm.requests.slice(before);
+  const userMsg = reqs[0].messages.find((m) => m.role === 'user');
+  assert.match(JSON.stringify(userMsg.content), /theme-factory 技能中的「Ocean Depths」主题/);
+  assert.match(reqs[0].messages[0].content, /- frontend-design（内置）/, '系统提示词里列出技能');
+  assert.ok(reqs[0].tools.some((t) => t.function.name === 'use_skill'));
+  const toolMsg = reqs[1].messages.find((m) => m.role === 'tool');
+  assert.match(toolMsg.content, /#1a2332/, 'use_skill 返回了深海主题的色值');
+  assert.match(await page.textContent('.thread'), /使用技能\s*theme-factory/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

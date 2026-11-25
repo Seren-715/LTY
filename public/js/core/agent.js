@@ -2,8 +2,21 @@
 import { chat } from './llm.js';
 import { normPath, checkWrite, sortedPaths } from './files.js';
 import { vueFiles, completeNodeProject, ENSURE_DEPS_PATH } from './scaffold.js';
+import { skillsPrompt, loadSkill, listSkills } from './skills.js';
 
 const READ_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'use_skill',
+      description: '读取一个技能的完整说明（技能清单见系统提示词）。任务与某个技能相关，或用户点名某个技能时，先调用它，再按说明工作。',
+      parameters: {
+        type: 'object',
+        properties: { name: { type: 'string', description: '技能名称，例如 frontend-design' } },
+        required: ['name'],
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -155,6 +168,11 @@ export function executeTool(name, args, ctx) {
 
   try {
     switch (name) {
+      case 'use_skill': {
+        const text = loadSkill(files, args.name);
+        if (!text) return { ok: false, output: `错误：没有名为「${args.name}」的技能。可用技能：${listSkills(files).map((x) => x.name).join('、')}` };
+        return { ok: true, output: text };
+      }
       case 'list_files':
         return { ok: true, output: fileList(files) };
 
@@ -295,6 +313,7 @@ function systemPrompt({ siteName, project, globalPrompt }) {
   const agents = project.files['AGENTS.md'];
   if (agents) parts.push('', 'AGENTS.md：', agents.slice(0, 8000));
   if (globalPrompt) parts.push('', '站点附加指令：', globalPrompt);
+  parts.push('', skillsPrompt(project.files));
   parts.push('', '当前项目文件：', fileList(project.files));
   return parts.join('\n');
 }
@@ -503,6 +522,7 @@ export function buildUserMessage(prompt, attachments = []) {
 /** 任务标题：取用户输入的第一行，没有文字时用附件名 */
 export function titleFromMessage(msg) {
   const raw = msg._text || (typeof msg.content === 'string' ? msg.content : '') || msg._files?.[0]?.name || (Array.isArray(msg.content) ? '图片' : '');
-  const line = String(raw).replace(/\s+/g, ' ').trim();
+  // 去掉输入框自动附加的说明（例如网页主题），标题只保留用户自己写的话
+  const line = String(raw).replace(/（网页主题：[^）]*）/g, '').replace(/\s+/g, ' ').trim();
   return line.length > 48 ? line.slice(0, 48) + '…' : line || '新任务';
 }
