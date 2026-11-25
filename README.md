@@ -28,7 +28,7 @@
 | 技能（Skills） | 参考 [anthropics/skills](https://github.com/anthropics/skills)：智能体平时只看到每个技能的名称和简介，需要时用 `use_skill` 读取完整说明。内置 `frontend-design`（让做出的网页更有设计感）和 `theme-factory`（10 套配色字体主题，输入框「＋ → 选择网页主题」）。也可以在项目里新建 `skills/<名称>/SKILL.md` 写自己的技能（开头用 `---` 包住 `name` 和 `description`），同名时覆盖内置技能 |
 | Vue / npm 项目 | 做 Vue 项目时智能体先生成与 `npm create vue@latest` 一致的 Vite + Vue 3 骨架；结束时自动补齐缺失的文件和代码里用到的依赖（如 vue-router、element-plus、sass）。项目带 `predev` 脚本，下载解压后只需 `npm run dev`：第一次会自动 `npm install` 并打开浏览器，以后依赖有变化也会自动重新安装（`scripts/ensure-deps.mjs`）。需要 Node.js 20.19+ |
 | 变更 | 每个任务的代码 diff（新增/删除行数统计），可以按文件或整体撤销 |
-| 预览 | 网页项目在沙箱 iframe 中直接运行，支持多页面跳转，并带控制台输出；出现报错时，控制台上会出现「让智能体修复」，一键把报错发给智能体 |
+| 预览 | 网页项目在沙箱 iframe 中直接运行，支持多页面跳转，并带控制台输出；出现报错时，控制台上会出现「让智能体修复」，一键把报错发给智能体。Vue 项目也能直接预览：用 Vue 官方的浏览器版编译器在本地编译 `.vue`，支持 `<script setup>`、scoped 样式、vue-router、pinia、`@/` 别名和按需加载的路由；其他第三方包从 esm.sh 在线加载，scss / less 按普通 CSS 处理 |
 | 项目 | 新建项目（空白 / 网页 / Node.js / Python / Vue 3 + Vite 模板），在线编辑器（语法高亮、Ctrl+S 保存），上传文件（支持拖拽），下载 ZIP，项目自定义指令 / `AGENTS.md` |
 | 管理（服务器模式） | 在网页中配置 API 地址、Key、模型列表、测试连接；开关注册；用户管理 |
 

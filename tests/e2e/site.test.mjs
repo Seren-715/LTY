@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { startStatic, startMockLLM, TEST_KEY } from '../helpers/servers.mjs';
+import { vueFiles } from '../../public/js/core/scaffold.js';
 
 let playwright;
 try {
@@ -205,6 +206,34 @@ test('Vue 项目：生成骨架、自动补全依赖，下载后可直接 npm ru
   assert.equal(pkg.dependencies.dayjs?.startsWith('^'), true, '代码里用到的 dayjs 被补进依赖');
   assert.equal(pkg.scripts.predev, 'node scripts/ensure-deps.mjs');
   assert.ok(files['src/components/Today.vue'] && files['vite.config.js']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Vue 预览：在网站里直接运行 .vue、vue-router 和 pinia', { skip }, async () => {
+  const { page, errors, ctx } = await login();
+  const files = {
+    ...vueFiles('vue-preview'),
+    'src/main.js': "import { createApp } from 'vue'\nimport { createPinia } from 'pinia'\nimport App from './App.vue'\nimport router from './router'\ncreateApp(App).use(createPinia()).use(router).mount('#app')\n",
+    'src/router/index.js': "import { createRouter, createWebHistory } from 'vue-router'\nimport Home from '@/views/Home.vue'\nexport default createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes: [{ path: '/', component: Home }, { path: '/about', component: () => import('../views/About.vue') }] })\n",
+    'src/stores/count.js': "import { defineStore } from 'pinia'\nimport { ref } from 'vue'\nexport const useCount = defineStore('count', () => { const n = ref(1); return { n, inc: () => n.value++ } })\n",
+    'src/App.vue': '<template><nav><RouterLink to="/">首页</RouterLink><RouterLink to="/about">关于</RouterLink></nav><RouterView /></template>\n',
+    'src/views/Home.vue': "<script setup>\nimport { useCount } from '@/stores/count'\nconst c = useCount()\n</script>\n<template><h1 class=\"t\">计数 {{ c.n }}</h1><button @click=\"c.inc\">加一</button></template>\n<style scoped>.t { color: rgb(1, 2, 3) }</style>\n",
+    'src/views/About.vue': '<template><h2>关于页面</h2></template>\n',
+  };
+  const p = await api(page, 'post', '/api/projects', { name: 'vue-preview', template: 'blank' });
+  await api(page, 'put', `/api/projects/${p.id}/files`, { files });
+  await page.goto(`${site.url}/#/projects/${p.id}`);
+  await page.waitForSelector('[data-act="preview"]');
+  if (!(await page.$('iframe.preview-frame'))) await page.click('[data-act="preview"]');
+  const frame = await (await page.waitForSelector('iframe.preview-frame')).contentFrame();
+  await frame.waitForSelector('h1.t', { timeout: 20000 });
+  await frame.click('button');
+  assert.equal(await frame.textContent('h1'), '计数 2');
+  assert.equal(await frame.$eval('h1', (e) => getComputedStyle(e).color), 'rgb(1, 2, 3)', 'scoped 样式生效');
+  await frame.click('text=关于');
+  await frame.waitForSelector('h2');
+  assert.equal(await page.locator('.c-line.error').count(), 0);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

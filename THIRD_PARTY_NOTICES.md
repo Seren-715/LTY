@@ -145,3 +145,14 @@ The author reserves the right to terminate the rights granted under this Fair Us
 
 - frontend-design：`SKILL.md` 正文原样收录，末尾追加了「本站补充说明」（中文字体与网络环境、文案语言、先给设计方案再写代码等）；描述后追加了中文触发说明。
 - theme-factory：10 个主题文件（`themes/*.md`）转为结构化数据；使用说明改写为中文并适配网页场景（不再展示 PDF 主题样张，改为在输入框「＋ → 选择网页主题」中选择；DejaVu 字体映射为含中文回退的网页字体栈）。
+
+## Vue 预览使用的库（public/vendor/vue/）
+
+以下文件为官方发布的浏览器构建，未作修改（编译器仅用 esbuild 压缩），均为 MIT 许可，许可证原文放在同一目录：
+
+| 文件 | 来源 | 版权 |
+| --- | --- | --- |
+| `vue.esm-browser.prod.js` | vue 3.5.46 | © 2018-present, Yuxi (Evan) You |
+| `compiler-sfc.esm-browser.min.js` | @vue/compiler-sfc 3.5.46 | © 2018-present, Yuxi (Evan) You |
+| `vue-router.esm-browser.prod.js` | vue-router 5.5.1 | © 2019-present Eduardo San Martin Morote |
+| `pinia.esm-browser.prod.js` | pinia 4.1.0 | © 2019-present Eduardo San Martin Morote |

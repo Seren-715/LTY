@@ -301,7 +301,7 @@ function systemPrompt({ siteName, project, globalPrompt }) {
     '- 网页项目的入口文件为 index.html，用户可以在「预览」面板中直接查看运行效果（支持相对路径引用项目内的 CSS/JS）。',
     '- 用户要做 Vue 项目时：先调用 scaffold_project（template: "vue"）生成与 npm create vue@latest 一致的 Vite + Vue 3 骨架，再在上面修改，组件用 <script setup> 写在 src/ 下的 .vue 文件中。',
     '- npm 项目（Vue、React、Vite 等）：不要创建 node_modules、package-lock.json、dist 等目录或文件；用到的第三方包都要写进 package.json 的 dependencies。项目已配置 predev 脚本，用户下载后在项目目录运行 npm run dev 即可（第一次会自动安装依赖并打开浏览器），完成时请这样告诉用户，不要让用户手动执行 npm install 或 npm create。',
-    '- Vue 单文件组件需要构建，「预览」面板无法直接运行，请提醒用户下载项目后运行。',
+    '- 「预览」面板可以直接运行 Vue 项目（.vue 单文件组件、vue-router、pinia；其他第三方包在线加载，scss / less 只按普通 CSS 处理）。完整效果以下载后 npm run dev 为准。',
     '- 完成后用简洁的中文总结：改了哪些文件、做了什么、如何运行或验证。',
     '- 用户使用什么语言提问，就用什么语言回答。',
     '',
