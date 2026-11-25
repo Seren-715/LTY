@@ -14,6 +14,11 @@
   --primary-soft: #e5f0ff;
   --primary-softer: #f1f7ff;
   --primary-ring: rgba(34, 114, 220, 0.22);
+  /* 初音青绿：品牌色，也用来表示「智能体在工作 / 已完成」 */
+  --accent: #39c5bb;        /* 只用于填充、描边、装饰，不用于文字（白底对比度 2.1:1） */
+  --accent-strong: #0b7670; /* 青绿色文字、青绿底白字（白底 5.5:1） */
+  --accent-soft: #e6f8f6;
+  --accent-ring: rgba(57, 197, 187, 0.28);
   --green: #12a150;
   --green-soft: #e7f7ee;
   --red: #dc3b3b;
@@ -666,7 +671,7 @@ a.card:hover .card-del, .card-del:focus-visible { opacity: 1; }
 @property --fx-beam { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 .composer.running::after {
   content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; pointer-events: none;
-  background: conic-gradient(from var(--fx-beam), transparent 0 68%, #01d0be 80%, #5aa6ff 90%, #a78bfa 96%, transparent 100%);
+  background: conic-gradient(from var(--fx-beam), transparent 0 66%, var(--accent) 80%, #8de3db 88%, #5aa6ff 95%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude;
   animation: fx-beam 3.2s linear infinite;
@@ -675,7 +680,7 @@ a.card:hover .card-del, .card-del:focus-visible { opacity: 1; }
 
 /* 闪光文字 · Magic UI Animated Shiny Text */
 .shimmer {
-  background: linear-gradient(90deg, transparent, rgba(43, 125, 233, .95) 50%, transparent) 0 0 / 80px 100% no-repeat, var(--text-3);
+  background: linear-gradient(90deg, transparent, var(--accent-strong) 50%, transparent) 0 0 / 80px 100% no-repeat, var(--text-3);
   background-color: var(--text-3); -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: fx-shiny 1.8s cubic-bezier(.6, .6, 0, 1) infinite;
 }
@@ -757,3 +762,30 @@ kbd { font: 500 11px/1 var(--font); padding: 3px 5px; border-radius: 5px; border
 .theme-sw { display: flex; width: 100%; height: 30px; border-radius: 8px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
 .theme-sw i { flex: 1; }
 .att-theme .att-sw { display: grid; grid-template-columns: 1fr 1fr; width: 30px; height: 30px; border-radius: 8px; overflow: hidden; flex: none; }
+
+/* ============ 配色分工 ============
+   蓝色（--primary）：操作和导航——按钮、链接、选中项、焦点框
+   初音青绿（--accent）：品牌，以及「智能体在工作 / 已完成」——标志、运行状态、思考中、完成、技能 */
+::selection { background: rgba(57, 197, 187, .26); }
+
+/* 首页标题里的项目名：整页唯一的强调 */
+.proj-pick { color: var(--accent-strong); border-bottom-color: var(--accent); }
+.proj-pick:hover { background: var(--accent-soft); }
+
+/* 智能体在工作 */
+.badge.running, .badge.queued { background: var(--accent-soft); color: var(--accent-strong); }
+.spin { color: var(--accent); }
+.btn .spin, .btn.primary .spin { color: currentColor; }
+.cursor::after { color: var(--accent); }
+.composer.running { border-color: rgba(57, 197, 187, .55); }
+.tool .ti-accent { color: var(--accent-strong); }
+
+/* 完成 */
+.badge.completed { background: var(--accent-soft); color: var(--accent-strong); }
+.changes-card { border-color: rgba(57, 197, 187, .45); }
+.cc-head { background: linear-gradient(90deg, var(--accent-soft), var(--surface-2) 60%); }
+.cc-head > svg { color: var(--accent-strong); }
+.toast.success { background: var(--accent-strong); }
+
+/* 自己的头像加一圈青绿 */
+.sb-user .avatar { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }

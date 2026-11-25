@@ -184,7 +184,7 @@ export async function taskView(container, id) {
       const s = diffStats(String(args.old_str ?? ''), String(args.new_str ?? ''));
       extra = `<span class="stat"><span class="add">+${s.added}</span><span class="del">−${s.removed}</span></span>`;
     }
-    return `<div class="tool ${failed ? 'failed' : ''}" data-tool="${idx}"><div class="tool-head">${icon(TOOL_ICON[name] || 'terminal', 'ti')}<span class="tool-label">${esc(TOOL_LABEL[name] || name)}</span><span class="path">${target}</span>${extra}${status}${icon('chev-right', 'chev')}</div><div class="tool-body"></div></div>`;
+    return `<div class="tool ${failed ? 'failed' : ''}" data-tool="${idx}"><div class="tool-head">${icon(TOOL_ICON[name] || 'terminal', name === 'use_skill' || name === 'scaffold_project' ? 'ti ti-accent' : 'ti')}<span class="tool-label">${esc(TOOL_LABEL[name] || name)}</span><span class="path">${target}</span>${extra}${status}${icon('chev-right', 'chev')}</div><div class="tool-body"></div></div>`;
   }
 
   function fillToolBody(idx, bodyEl) {
