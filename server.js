@@ -449,7 +449,7 @@ route('POST', '/api/projects', ({ user, body }) => {
     name,
     description: String(body.description || '').slice(0, 500),
     instructions: '',
-    files: templateFiles(body.template),
+    files: templateFiles(body.template, name),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });

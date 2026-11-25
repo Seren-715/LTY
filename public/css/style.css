@@ -360,6 +360,7 @@ body.sb-collapsed .sidebar { margin-left: -264px; }
   mask-composite: intersect;
 }
 .chat-col > .messages, .chat-col > .dock, .chat-col > .task-bar { position: relative; z-index: 1; }
+.chat-col > .task-bar { z-index: 3; } /* 顶栏下拉菜单要盖在消息上面 */
 .task-bar { border-bottom: 1px solid transparent; }
 .tb-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding-left: 4px; }
 .tb-title h2 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; border-radius: 6px; padding: 2px 6px; }

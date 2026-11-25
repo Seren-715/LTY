@@ -1,4 +1,5 @@
 // 生成 ZIP（存储模式，无压缩），用于下载项目
+import { completeNodeProject } from './core/scaffold.js';
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -99,5 +100,7 @@ export function downloadFile(path, content) {
 /** 把一组文件打包成 ZIP 下载；压缩包内以项目名作为根目录 */
 export function downloadZip(projectName, files, suffix = '') {
   const name = safeName(projectName);
+  // 下载完整项目时补上 npm / Vue 项目缺失的文件，解压后直接 npm run dev
+  if (!suffix) files = { ...files, ...completeNodeProject(files, { name: projectName }) };
   downloadBlob(makeZip(files, name), `${name}${suffix}.zip`);
 }

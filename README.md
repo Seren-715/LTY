@@ -24,10 +24,11 @@
 | 下载 | 任务完成后的变更卡片可下载整个项目或只下载修改过的文件（ZIP）；右侧面板和项目编辑页可下载单个文件 |
 | 附件 | 输入框左侧「＋」：添加文件（文本内容随消息发送）、添加图片、截取屏幕、导入文件夹；也可以把文件或文件夹直接拖到页面上，或粘贴截图。图片会自动压缩，OpenAI 与 Claude 协议均支持 |
 | 导入本地项目 | 拖入文件夹（或「＋ → 导入文件夹到项目」）：首页会以文件夹名新建项目，任务页会导入到当前项目；自动跳过 node_modules、.git、dist 等目录以及图片、二进制和超过 1MB 的文件 |
-| 智能体 | 通过工具调用读写项目文件：`list_files` / `read_file` / `search_files` / `write_file` / `edit_file` / `delete_file`；流式输出，显示思考过程（reasoning） |
+| 智能体 | 通过工具调用读写项目文件：`scaffold_project` / `list_files` / `read_file` / `search_files` / `write_file` / `edit_file` / `delete_file`；流式输出，显示思考过程（reasoning） |
+| Vue / npm 项目 | 做 Vue 项目时智能体先生成与 `npm create vue@latest` 一致的 Vite + Vue 3 骨架；结束时自动补齐缺失的文件和代码里用到的依赖（如 vue-router、element-plus、sass）。项目带 `predev` 脚本，下载解压后只需 `npm run dev`：第一次会自动 `npm install` 并打开浏览器，以后依赖有变化也会自动重新安装（`scripts/ensure-deps.mjs`）。需要 Node.js 20.19+ |
 | 变更 | 每个任务的代码 diff（新增/删除行数统计），可以按文件或整体撤销 |
 | 预览 | 网页项目在沙箱 iframe 中直接运行，支持多页面跳转，并带控制台输出 |
-| 项目 | 新建项目（空白 / 网页 / Node.js / Python 模板），在线编辑器（语法高亮、Ctrl+S 保存），上传文件（支持拖拽），下载 ZIP，项目自定义指令 / `AGENTS.md` |
+| 项目 | 新建项目（空白 / 网页 / Node.js / Python / Vue 3 + Vite 模板），在线编辑器（语法高亮、Ctrl+S 保存），上传文件（支持拖拽），下载 ZIP，项目自定义指令 / `AGENTS.md` |
 | 管理（服务器模式） | 在网页中配置 API 地址、Key、模型列表、测试连接；开关注册；用户管理 |
 
 ## 纯静态部署与唐果 Key 登录

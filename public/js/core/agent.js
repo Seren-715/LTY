@@ -1,6 +1,7 @@
 // 代码智能体：在项目虚拟文件系统上通过工具调用完成编码任务（浏览器与 Node 通用）
 import { chat } from './llm.js';
 import { normPath, checkWrite, sortedPaths } from './files.js';
+import { vueFiles, completeNodeProject, ENSURE_DEPS_PATH } from './scaffold.js';
 
 const READ_TOOLS = [
   {
@@ -46,6 +47,22 @@ const READ_TOOLS = [
 ];
 
 const WRITE_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'scaffold_project',
+      description:
+        '生成标准项目骨架（与 npm create vue@latest 一致的 Vite + Vue 3 项目：package.json、vite.config.js、index.html、src/main.js、src/App.vue 等），只创建缺失的文件，不覆盖已有文件。新建 Vue 项目时先调用它，再在骨架上修改。',
+      parameters: {
+        type: 'object',
+        properties: {
+          template: { type: 'string', enum: ['vue'], description: '项目类型，目前支持 vue' },
+          name: { type: 'string', description: '项目名（用于 package.json 的 name，可省略）' },
+        },
+        required: ['template'],
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -107,15 +124,34 @@ function fileList(files) {
 }
 
 /** 执行一次工具调用，返回 { ok, output, changed } */
+// 记录一次文件变更（用于「变更」面板和撤销）
+function recordChange(task, files, path, after) {
+  task.changes ||= {};
+  if (!(path in task.changes)) task.changes[path] = { before: path in files ? files[path] : null };
+  task.changes[path].after = after;
+  if (task.changes[path].before === after) delete task.changes[path];
+}
+
+/** 批量写入文件（跳过超出限制的文件），返回实际写入的路径 */
+function applyFiles(project, task, map) {
+  const done = [];
+  for (const [path, content] of Object.entries(map)) {
+    try {
+      const p = checkWrite(project.files, path, content);
+      recordChange(task, project.files, p, content);
+      project.files[p] = content;
+      done.push(p);
+    } catch {
+      /* 超出项目大小限制等，跳过 */
+    }
+  }
+  return done;
+}
+
 export function executeTool(name, args, ctx) {
   const { project, task, mode } = ctx;
   const files = project.files;
-  const record = (path, after) => {
-    task.changes ||= {};
-    if (!(path in task.changes)) task.changes[path] = { before: path in files ? files[path] : null };
-    task.changes[path].after = after;
-    if (task.changes[path].before === after) delete task.changes[path];
-  };
+  const record = (path, after) => recordChange(task, files, path, after);
 
   try {
     switch (name) {
@@ -169,6 +205,7 @@ export function executeTool(name, args, ctx) {
         return { ok: true, output: out.length ? out.join('\n') + (out.length >= 100 ? '\n…（仅显示前 100 条）' : '') : '没有找到匹配项' };
       }
 
+      case 'scaffold_project':
       case 'write_file':
       case 'edit_file':
       case 'delete_file':
@@ -177,6 +214,21 @@ export function executeTool(name, args, ctx) {
 
       default:
         return { ok: false, output: `错误：未知工具 ${name}` };
+    }
+
+    if (name === 'scaffold_project') {
+      if (args.template !== 'vue') return { ok: false, output: '错误：目前只支持 template = "vue"' };
+      const tpl = vueFiles(args.name || project.name);
+      const missing = Object.fromEntries(Object.entries(tpl).filter(([p]) => !(p in files)));
+      const created = applyFiles(project, task, missing);
+      // 已有 package.json 等文件时，补上缺失的依赖和自动安装脚本
+      const updated = applyFiles(project, task, completeNodeProject(files, { name: project.name })).filter((p) => !created.includes(p));
+      const lines = [];
+      if (created.length) lines.push(`已创建 ${created.length} 个文件：\n${created.join('\n')}`);
+      if (updated.length) lines.push(`已补全：${updated.join('、')}`);
+      if (!lines.length) lines.push('项目骨架已完整，无需创建文件。');
+      lines.push('入口为 index.html → src/main.js → src/App.vue，可用 @/ 引用 src 下的文件。接下来在此基础上修改。');
+      return { ok: true, output: lines.join('\n'), changed: created.length + updated.length > 0 };
     }
 
     if (name === 'write_file') {
@@ -229,6 +281,9 @@ function systemPrompt({ siteName, project, globalPrompt }) {
     '- 修改已有文件时优先用 edit_file 做精确替换；新建文件或大幅重写时用 write_file 并提供完整内容。',
     '- 写出完整、可直接运行的代码，保持与现有代码一致的风格，不要留下 TODO 占位符。',
     '- 网页项目的入口文件为 index.html，用户可以在「预览」面板中直接查看运行效果（支持相对路径引用项目内的 CSS/JS）。',
+    '- 用户要做 Vue 项目时：先调用 scaffold_project（template: "vue"）生成与 npm create vue@latest 一致的 Vite + Vue 3 骨架，再在上面修改，组件用 <script setup> 写在 src/ 下的 .vue 文件中。',
+    '- npm 项目（Vue、React、Vite 等）：不要创建 node_modules、package-lock.json、dist 等目录或文件；用到的第三方包都要写进 package.json 的 dependencies。项目已配置 predev 脚本，用户下载后在项目目录运行 npm run dev 即可（第一次会自动安装依赖并打开浏览器），完成时请这样告诉用户，不要让用户手动执行 npm install 或 npm create。',
+    '- Vue 单文件组件需要构建，「预览」面板无法直接运行，请提醒用户下载项目后运行。',
     '- 完成后用简洁的中文总结：改了哪些文件、做了什么、如何运行或验证。',
     '- 用户使用什么语言提问，就用什么语言回答。',
     '',
@@ -268,7 +323,7 @@ function repairHistory(history) {
 }
 
 function buildMessages(rawHistory, anthropicModel) {
-  const history = repairHistory(rawHistory);
+  const history = repairHistory(rawHistory.filter((m) => !m._note));
   const toolIdx = [];
   history.forEach((m, i) => m.role === 'tool' && toolIdx.push(i));
   const keepFull = new Set(toolIdx.slice(-12));
@@ -315,6 +370,27 @@ export async function runAgent({ task, project, config, signal, emit, saveTask, 
   const tools = [...READ_TOOLS, ...WRITE_TOOLS];
   const maxSteps = Math.max(1, Math.min(100, parseInt(config.maxSteps, 10) || 30));
 
+  // 本次运行改过文件时，检查 npm / Vue 项目是否完整，自动补上缺失的文件和依赖
+  function finishProject() {
+    if (!task.changes || !Object.keys(task.changes).length) return;
+    const fixes = completeNodeProject(project.files, { name: project.name });
+    const done = applyFiles(project, task, fixes);
+    if (!done.length) return;
+    saveProject();
+    const list = done.map((p) => `\`${p}\``).join('、');
+    const auto = project.files['package.json']?.includes(ENSURE_DEPS_PATH);
+    const note = {
+      role: 'assistant',
+      content: `已自动补全项目文件：${list}。${auto ? '\n\n下载项目后，在项目目录打开命令行运行 `npm run dev` 即可：第一次会自动安装依赖，然后打开浏览器。' : ''}`,
+      _note: true,
+      _at: Date.now(),
+    };
+    task.history.push(note);
+    saveTask();
+    emit({ type: 'message', message: note });
+    emit({ type: 'changes' });
+  }
+
   for (let step = 0; step < maxSteps; step++) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const messages = [
@@ -351,7 +427,7 @@ export async function runAgent({ task, project, config, signal, emit, saveTask, 
     saveTask();
     emit({ type: 'message', message: msg });
 
-    if (!r.toolCalls.length) return;
+    if (!r.toolCalls.length) return finishProject();
 
     let changed = false;
     for (const tc of r.toolCalls) {
@@ -373,6 +449,7 @@ export async function runAgent({ task, project, config, signal, emit, saveTask, 
     if (changed) emit({ type: 'changes' });
   }
 
+  finishProject();
   const note = { role: 'assistant', content: `（已达到单次运行的最大步数 ${maxSteps}，任务暂停。可以发送“继续”让我接着完成。）`, _at: Date.now() };
   task.history.push(note);
   saveTask();

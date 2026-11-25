@@ -13,13 +13,14 @@ import { play, confettiFrom, blurIn } from '../fx.js';
 
 const TOOL_LABEL = {
   list_files: '查看文件列表',
+  scaffold_project: '生成项目骨架',
   read_file: '读取',
   search_files: '搜索',
   write_file: '写入',
   edit_file: '编辑',
   delete_file: '删除',
 };
-const TOOL_ICON = { list_files: 'list', read_file: 'file', search_files: 'search', write_file: 'file-plus', edit_file: 'edit', delete_file: 'trash' };
+const TOOL_ICON = { scaffold_project: 'sparkle', list_files: 'list', read_file: 'file', search_files: 'search', write_file: 'file-plus', edit_file: 'edit', delete_file: 'trash' };
 
 function parseArgs(raw) {
   try {
@@ -158,7 +159,7 @@ export async function taskView(container, id) {
     const args = parseArgs(tc.function.arguments);
     const name = tc.function.name;
     const idx = toolData.push({ tc, args, result }) - 1;
-    const target = args.path ? esc(args.path) : args.query ? `“${esc(args.query)}”` : '';
+    const target = args.path ? esc(args.path) : args.query ? `“${esc(args.query)}”` : name === 'scaffold_project' ? 'Vite + Vue 3' : '';
     let status = '';
     const failed = result && (result._ok === false || /^错误[：:]/.test(result.content));
     if (!result) status = running() ? '<span class="spin"></span>' : '<span class="tool-note">未执行</span>';

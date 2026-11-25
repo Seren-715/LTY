@@ -1,4 +1,5 @@
 // 新建项目时可选的初始模板
+import { vueFiles } from './scaffold.js';
 
 const templates = {
   blank: { label: '空白项目', files: {} },
@@ -117,10 +118,14 @@ python main.py
   },
 };
 
+// Vue 模板与智能体的 scaffold_project 共用同一份骨架，项目名在创建时填入
+templates.vue = { label: 'Vue 3 + Vite', files: null };
+
 export function templateList() {
   return Object.entries(templates).map(([id, t]) => ({ id, label: t.label }));
 }
 
-export function templateFiles(id) {
+export function templateFiles(id, name) {
+  if (id === 'vue') return vueFiles(name);
   return { ...(templates[id] || templates.blank).files };
 }
